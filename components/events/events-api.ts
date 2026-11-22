@@ -18,6 +18,8 @@ export type EventListData = {
 /** Whether the visitor is signed in, and the ticket they hold if any. */
 export type EnrollmentData = {
   signedIn: boolean;
+  /** `true` when the signed-in visitor created this event. */
+  isOwner: boolean;
   registration: { id: string; status: RegistrationState; ticketCode: string } | null;
 };
 

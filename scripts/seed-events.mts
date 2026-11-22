@@ -9,6 +9,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { toGregorian } from "jalaali-js";
+import { browseEventDetails } from "../lib/event-copy.ts";
 import { seedEvents } from "../lib/seed-events.ts";
 
 const prisma = new PrismaClient();
@@ -33,10 +34,13 @@ let updated = 0;
 
 try {
   for (const event of seedEvents) {
+    /* The seeded page copy is written into the row too, so the slug page
+       renders from the database alone — no runtime fallback to static data. */
+    const copy = browseEventDetails[event.slug];
     const data = {
       title: event.title,
       summary: event.summary.slice(0, 140),
-      description: event.summary,
+      description: (copy?.about ?? [event.summary]).join("\n\n"),
       category: event.category,
       city: event.city,
       venue: event.venue,
@@ -44,6 +48,8 @@ try {
       startsAt: startsAt(event),
       capacity: event.capacity,
       price: event.price,
+      highlights: copy?.highlights ?? [],
+      agenda: copy?.agenda ?? [],
       coverGradient: event.gradient,
       organizerName: event.organizer,
       status: "PUBLISHED" as const,

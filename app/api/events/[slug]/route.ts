@@ -7,8 +7,8 @@ type RouteContext = { params: Promise<{ slug: string }> };
 /**
  * One published event for `/events/[slug]`: the card, its page copy, the
  * similar list, and the visitor's own booking state (signed in or not,
- * which ticket they hold). The session read — like every dashboard route —
- * keeps the handler at request time.
+ * which ticket they hold). Both the session and the event reads happen at
+ * request time, so the page always shows the row as it is right now.
  *
  * A slug with no published event behind it answers `null` with a 200,
  * which the client turns into a not-found card: `notFound()` only runs on
@@ -20,10 +20,10 @@ export async function GET(_request: Request, context: RouteContext) {
   const session = await getSession();
   const userId = session?.user?.id;
 
-  const found = await getEventBySlug(slug);
+  const found = await getEventBySlug(slug, userId);
   if (!found) return NextResponse.json(null);
 
-  const { event, details } = found;
+  const { event, details, isOwner } = found;
 
   const [similar, registration] = await Promise.all([
     getSimilarEvents(event.id, event.category),
@@ -34,6 +34,6 @@ export async function GET(_request: Request, context: RouteContext) {
     event,
     details,
     similar,
-    enrollment: { signedIn: Boolean(userId), registration },
+    enrollment: { signedIn: Boolean(userId), isOwner, registration },
   });
 }

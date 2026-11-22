@@ -459,10 +459,25 @@ export async function enrollInEvent(eventId: string): Promise<EventActionResult>
 
   const event = await prisma.event.findFirst({
     where: { id: eventId, status: "PUBLISHED" },
-    select: { id: true, title: true, capacity: true, startsAt: true, slug: true },
+    select: {
+      id: true,
+      title: true,
+      capacity: true,
+      startsAt: true,
+      slug: true,
+      organizerId: true,
+    },
   });
   if (!event) {
     return { ok: false, error: "این رویداد در دسترس نیست." };
+  }
+  /* The page disables the button for an owner, but the action is a public
+     POST endpoint: ownership is checked again here before any ticket is made. */
+  if (event.organizerId === user.id) {
+    return {
+      ok: false,
+      error: "برگزارکنندگان نمی‌توانند در رویداد خود ثبت نام کنند.",
+    };
   }
   if (realInstant(event.startsAt).getTime() <= Date.now()) {
     return { ok: false, error: "ثبت‌نام این رویداد بسته شده است." };

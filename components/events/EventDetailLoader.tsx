@@ -59,6 +59,7 @@ export default function EventDetailLoader({ slug }: { slug: string }) {
           price={event.price}
           registration={enrollment.registration}
           signedIn={enrollment.signedIn}
+          isOwner={enrollment.isOwner}
           onChanged={reload}
         />
       }

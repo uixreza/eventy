@@ -354,6 +354,7 @@ export function AuthModal({
      the containing block for this fixed-position overlay. */
   return createPortal(
     <motion.div
+      data-auth-modal=""
       className="fixed inset-0 z-[100] flex items-end justify-center p-0 sm:items-center sm:p-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}

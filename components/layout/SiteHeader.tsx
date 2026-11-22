@@ -80,7 +80,12 @@ export default function SiteHeader({ categories }: { categories: PublicCategory[
   useEffect(() => {
     if (!menuOpen) return;
     const onPointerDown = (event: MouseEvent) => {
-      if (!headerRef.current?.contains(event.target as Node)) setMenuOpen(false);
+      const target = event.target as Node;
+      /* The auth dialog is portaled to <body>, so a click inside it counts as
+         "outside" the header. Closing the mobile menu here would unmount the
+         trigger that owns the dialog and make the form vanish mid-typing. */
+      if (target instanceof Element && target.closest("[data-auth-modal]")) return;
+      if (!headerRef.current?.contains(target)) setMenuOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setMenuOpen(false);

@@ -135,8 +135,11 @@ export default function EventDetail({ event, details, similar, action }: EventDe
               درباره این رویداد
             </h2>
             <div className="mt-3 space-y-3">
-              {details.about.map((paragraph) => (
-                <p key={paragraph} className="text-sm leading-7 text-slate-600 dark:text-slate-300">
+              {details.about.map((paragraph, index) => (
+                <p
+                  key={`about-${index}`}
+                  className="text-sm leading-7 text-slate-600 dark:text-slate-300"
+                >
                   {paragraph}
                 </p>
               ))}
@@ -150,8 +153,11 @@ export default function EventDetail({ event, details, similar, action }: EventDe
                 چه چیزی در انتظارتان است؟
               </h2>
               <ul className="mt-3 space-y-2.5">
-                {details.highlights.map((item) => (
-                  <li key={item} className="flex items-start gap-2.5 text-sm text-slate-600 dark:text-slate-300">
+                {details.highlights.map((item, index) => (
+                  <li
+                    key={`highlight-${index}`}
+                    className="flex items-start gap-2.5 text-sm text-slate-600 dark:text-slate-300"
+                  >
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
                     <span className="leading-6">{item}</span>
                   </li>
@@ -168,7 +174,10 @@ export default function EventDetail({ event, details, similar, action }: EventDe
               </h2>
               <ol className="mt-4 space-y-0">
                 {details.agenda.map((item, index) => (
-                  <li key={`${item.time}-${item.title}`} className="relative flex gap-4 pb-5 last:pb-0">
+                  <li
+                    key={`agenda-${index}`}
+                    className="relative flex gap-4 pb-5 last:pb-0"
+                  >
                     {/* Rail connecting the time dots */}
                     {index < details.agenda.length - 1 && (
                       <span

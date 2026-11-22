@@ -1,9 +1,10 @@
 "use client";
 
-import { useTransition } from "react";
-import Link from "next/link";
+import { useState, useTransition } from "react";
+import { AnimatePresence } from "framer-motion";
 import { CheckCircle2, Ticket, XCircle } from "lucide-react";
 import { sileo } from "sileo";
+import { AuthModal } from "@/components/auth/AddEventButton";
 import { cancelRegistration, enrollInEvent } from "@/app/actions/events";
 import type { RegistrationState } from "@/lib/event-types";
 import { toFa } from "@/lib/utils";
@@ -18,6 +19,8 @@ type EnrollButtonProps = {
   /** The signed-in person's ticket, when they have one. */
   registration: { id: string; status: RegistrationState; ticketCode: string } | null;
   signedIn: boolean;
+  /** The signed-in visitor created this event, so they cannot join it. */
+  isOwner: boolean;
   /**
    * Runs the page's own fetch again after a change — the event page gets
    * its rows from `GET /api/events/[slug]`, so a server refresh alone
@@ -41,12 +44,39 @@ export default function EnrollButton({
   price,
   registration,
   signedIn,
+  isOwner,
   onChanged,
 }: EnrollButtonProps) {
   const [pending, startTransition] = useTransition();
+  /** Signed-out visitors get the same sign-in sheet the save button uses. */
+  const [authOpen, setAuthOpen] = useState(false);
 
   const confirmed = registration?.status === "CONFIRMED";
   const waiting = registration?.status === "WAITLIST";
+  const full = seatsLeft === 0;
+
+  /* Owners are blocked by the server action too — this just makes the rule
+     visible before anyone can press the button. */
+  if (isOwner) {
+    return (
+      <div className="mt-4 space-y-2.5">
+        <button
+          type="button"
+          disabled
+          className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700 dark:disabled:text-slate-400"
+        >
+          {full
+            ? "ثبت نام در لیست انتظار"
+            : price === null
+              ? "رزرو سریع صندلی"
+              : "ثبت نام در رویداد"}
+        </button>
+        <p className="text-center text-[11px] text-slate-500 dark:text-slate-400">
+          برگزارکنندگان نمی‌توانند در رویداد خود ثبت نام کنند.
+        </p>
+      </div>
+    );
+  }
 
   function enroll() {
     startTransition(async () => {
@@ -136,18 +166,35 @@ export default function EnrollButton({
     );
   }
 
-  /* A free seat is waiting. */
-  const full = seatsLeft === 0;
-
-  /* Anonymous visitors are sent to the sign-in modal on the landing page. */
+  /* Anonymous visitors get the same sign-in sheet as the save button. Once
+     the session cookie exists, the booking they asked for runs right away. */
   if (!signedIn) {
     return (
-      <Link
-        href="/"
-        className="mt-4 block w-full rounded-xl bg-blue-600 py-3 text-center text-sm font-bold text-white shadow-sm transition-all duration-200 hover:bg-blue-700 active:scale-[0.98]"
-      >
-        برای ثبت‌نام وارد شوید
-      </Link>
+      <>
+        <button
+          type="button"
+          onClick={() => setAuthOpen(true)}
+          aria-haspopup="dialog"
+          className="mt-4 w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white shadow-sm transition-all duration-200 hover:bg-blue-700 active:scale-[0.98]"
+        >
+          {full
+            ? "ثبت نام در لیست انتظار"
+            : price === null
+              ? "رزرو سریع صندلی"
+              : "ثبت نام در رویداد"}
+        </button>
+        <AnimatePresence>
+          {authOpen && (
+            <AuthModal
+              onClose={() => setAuthOpen(false)}
+              onSuccess={() => {
+                setAuthOpen(false);
+                enroll();
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </>
     );
   }
 

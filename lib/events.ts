@@ -10,7 +10,7 @@ import {
   formatJalaliTime,
   isPast,
 } from "@/lib/jalali";
-import { browseEventDetails, type EventAgendaItem, type EventDetails } from "@/lib/data";
+import type { EventAgendaItem, EventDetails } from "@/lib/data";
 import { getCategoryIcons } from "@/lib/categories";
 import { FALLBACK_ICON } from "@/lib/category-icons";
 import type {
@@ -28,12 +28,13 @@ import type {
  * Data Access Layer for events.
  *
  * Every read of the event tables goes through this module, so the rules
- * (which events are public, how a row becomes a card, which cache tag
- * invalidates it) live in one place. Public reads are cached with
- * `use cache` — a mutation invalidates them with `updateTag` (see
- * `app/actions/events.ts`). The per-person reads are the exception: the
- * bookmark list and the dashboard's hosted/enrolled lists always hit the
- * database, so a load can never show a stale page.
+ * (which events are public and how a row becomes a card) live in one place.
+ * The public *grids* are cached with `use cache` and invalidated by `updateTag`
+ * on a write (see `app/actions/events.ts`). The event *detail* read is
+ * deliberately uncached: its slug page must always show what the database
+ * holds right now, including a direct edit that no action could tag. The
+ * per-person reads (bookmarks, hosted/enrolled lists) hit the database for
+ * the same reason.
  */
 
 /** The subset of an event row the cards need. */
@@ -192,26 +193,24 @@ function parseAgenda(value: unknown): EventAgendaItem[] {
 }
 
 /**
- * One event, by its URL slug, with the long-form copy of its page.
+ * One event, by its URL slug, with the copy its page renders.
  *
- * The seeded events keep their hand-written copy (`lib/data.ts`); anything
- * created on the platform gets a description built from its own fields and
- * the highlights/agenda the organizer typed into the wizard.
+ * This read is intentionally **not** cached. The slug page is the public face
+ * of the event row: an edit in the form, an admin approval, or a direct
+ * database change must show up on the very next visit. `description` carries
+ * the long-form about text (the seed script writes it there), while
+ * `highlights` and `agenda` are the lists the organizer typed into the wizard.
+ * `viewerId`, when supplied, is used only to answer whether that person owns
+ * the event — the organizer id itself never leaves this module.
  */
 export async function getEventBySlug(
   slug: string,
-): Promise<{ event: EventCard; details: EventDetails } | null> {
-  "use cache";
-  cacheLife("minutes");
-  cacheTag("events");
-  cacheTag("categories");
-
+  viewerId?: string,
+): Promise<{ event: EventCard; details: EventDetails; isOwner: boolean } | null> {
   const event = await prisma.event.findFirst({
     where: { slug, status: "PUBLISHED" },
   });
   if (!event) return null;
-
-  cacheTag(`event:${event.id}`);
 
   const [counts, categoryIcons] = await Promise.all([
     countTickets([event.id]),
@@ -219,27 +218,35 @@ export async function getEventBySlug(
   ]);
   const card = toCard(event, counts.get(event.id)?.confirmed ?? 0, categoryIcons);
 
-  const copy = browseEventDetails[slug];
-  const details: EventDetails = copy ?? {
+  /* A seed description holds several paragraphs separated by blank lines;
+     a form-created event holds one. Splitting here keeps both shaped alike. */
+  const paragraphs = event.description
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+  const details: EventDetails = {
     about: [
       `«${event.title}» توسط ${event.organizerName} در ${event.venue} شهر ${event.city} برگزار می‌شود.`,
-      event.summary || event.description,
-    ].filter(Boolean),
-    /* Both lists come from the wizard; an empty one hides its section. */
+      ...(paragraphs.length > 0 ? paragraphs : event.summary ? [event.summary] : []),
+    ],
+    /* Both lists come straight from the row; an empty one hides its section. */
     highlights: event.highlights,
     agenda: parseAgenda(event.agenda),
   };
 
-  return { event: card, details };
+  return {
+    event: card,
+    details,
+    isOwner: Boolean(viewerId && event.organizerId === viewerId),
+  };
 }
 
-/** Other published events of the same category — the «رویدادهای مشابه» list. */
+/**
+ * Other published events of the same category — the «رویدادهای مشابه» list.
+ * Like the detail read, this is uncached so the slug page's sidebar changes
+ * with the table on the very next request.
+ */
 export async function getSimilarEvents(eventId: string, category: string): Promise<EventCard[]> {
-  "use cache";
-  cacheLife("minutes");
-  cacheTag("events");
-  cacheTag("categories");
-
   const events = await prisma.event.findMany({
     where: { status: "PUBLISHED", category },
     orderBy: { startsAt: "asc" },

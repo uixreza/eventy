@@ -179,6 +179,12 @@ export default function NewEventForm({
     pad2(hour),
   )}:${toFa(pad2(minute))}`;
   const priceNumber = Number(price) || 0;
+  /* The preview mirrors what the publish action stores: blank rows are left
+     out, so the last step shows exactly the lists the event page will get. */
+  const previewHighlights = highlights.map((item) => item.trim()).filter(Boolean);
+  const previewAgenda = agenda
+    .map((row) => ({ time: row.time.trim(), title: row.title.trim() }))
+    .filter((row) => row.time && row.title);
   const isEditing = Boolean(initial?.id);
   const isLastStep = step === STEPS.length - 1;
 
@@ -1048,6 +1054,55 @@ export default function NewEventForm({
                       </span>
                     </p>
                   </div>
+
+                  {/* The two lists the event page will render — only the rows
+                      that survived the same trim/filter as the submit payload. */}
+                  {previewHighlights.length > 0 && (
+                    <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
+                      <p className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                        <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                        چه چیزی در انتظارتان است؟
+                      </p>
+                      <ul className="mt-2 space-y-1.5">
+                        {previewHighlights.map((item, index) => (
+                          <li
+                            key={`highlight-${index}`}
+                            className="flex items-start gap-1.5 text-[11px] leading-5 text-slate-500 dark:text-slate-400"
+                          >
+                            <Check
+                              className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500"
+                              strokeWidth={3}
+                            />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {previewAgenda.length > 0 && (
+                    <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
+                      <p className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                        <Clock className="h-3.5 w-3.5 shrink-0 text-blue-500 dark:text-blue-400" />
+                        برنامه زمانی
+                      </p>
+                      <ol className="mt-2 space-y-2">
+                        {previewAgenda.map((row, index) => (
+                          <li
+                            key={`agenda-${index}`}
+                            className="flex gap-2 text-[11px] leading-5"
+                          >
+                            <span className="w-12 shrink-0 font-bold text-blue-600 dark:text-blue-400">
+                              {row.time}
+                            </span>
+                            <span className="text-slate-600 dark:text-slate-300">
+                              {row.title}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
                 </div>
 
                 {/* Price + capacity */}

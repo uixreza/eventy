@@ -193,7 +193,7 @@ export default function MyEventsView({ hosted, enrolled, onChanged }: MyEventsVi
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.97 }}
                   transition={{ duration: 0.22, ease: "easeOut" }}
-                  className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-md dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center"
+                  className="grid grid-cols-1 gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-md dark:border-slate-700 dark:bg-slate-900 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center"
                 >
                   {/* Date cover */}
                   <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl sm:h-20 sm:w-20">
@@ -252,7 +252,7 @@ export default function MyEventsView({ hosted, enrolled, onChanged }: MyEventsVi
                   </div>
 
                   {/* Actions */}
-                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800 sm:col-span-2 sm:pl-24">
                     <Link
                       href={`/dashboard/events/${event.id}/edit`}
                       className={ghostButton}
@@ -305,7 +305,7 @@ export default function MyEventsView({ hosted, enrolled, onChanged }: MyEventsVi
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.97 }}
                   transition={{ duration: 0.22, ease: "easeOut" }}
-                  className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-md dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center"
+                  className="grid grid-cols-1 gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-md dark:border-slate-700 dark:bg-slate-900 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center"
                 >
                   {/* Date cover */}
                   <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl sm:h-20 sm:w-20">
@@ -368,7 +368,7 @@ export default function MyEventsView({ hosted, enrolled, onChanged }: MyEventsVi
                   </div>
 
                   {/* Actions */}
-                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800 sm:col-span-2 sm:pl-24">
                     {!event.isPast && event.status !== "CANCELLED" && (
                       <>
                         <button
