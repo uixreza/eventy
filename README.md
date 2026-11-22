@@ -1,36 +1,108 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# رویدادشو (RooDadShow)
 
-## Getting Started
+پلتفرم کشف رویداد، دورهمی، تیم‌سازی و تکمیل ظرفیت رویدادها — رابط کاربری (RTL / فارسی).
 
-First, run the development server:
+> وضعیت فعلی: **احراز هویت و رویدادها واقعی** — ورود با کد OTP روی دیتابیس (Neon/Postgres) انجام می‌شود و
+> رویدادها، ثبت‌نام‌ها و بلیت‌ها در جدول‌های `Event` و `Registration` ذخیره می‌شوند. بخش‌های تیم، ذخیره‌شده‌ها و
+> اعلان‌ها هنوز نمایشی (Mock) هستند.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## روت‌ها
+
+| مسیر | توضیح |
+| --- | --- |
+| `/` | صفحه اصلی (Landing) |
+| `/events` | فهرست رویدادهای منتشرشده (از دیتابیس) با فیلتر جستجو، دسته، شهر، وضعیت و قیمت |
+| `/events/[slug]` | صفحه یک رویداد + ثبت‌نام واقعی |
+| `/dashboard` | پنل کاربری مشتریان — آمار واقعی رویدادها و بلیت‌ها |
+| `/dashboard/events` | «رویدادهای من»: رویدادهایی که ساخته‌اید + ثبت‌نام‌های شما |
+| `/dashboard/events/new` | ثبت رویداد جدید (فرم واقعی) |
+| `/dashboard/events/[id]/edit` | ویرایش رویداد خودتان |
+| `/console` | کنسول مدیریت (ادمین) — `/console/events` صف تأیید رویدادهاست |
+| هر مسیر ناموجود | صفحه ۴۰۴ اختصاصی (`app/not-found.tsx`) |
+
+## دیتابیس
+
+جدول‌ها (Prisma — `prisma/schema.prisma`):
+
+| مدل | نقش |
+| --- | --- |
+| `User` | کاربران (شماره موبایل، کد ملی، نقش `USER`/`ADMIN`) |
+| `OtpCode` | کدهای ورود یک‌بارمصرف |
+| `Event` | رویداد: عنوان، توضیح، دسته، شهر، مکان، زمان شمسی، ظرفیت، قیمت، کاور، وضعیت بررسی |
+| `Registration` | بلیت هر نفر برای هر رویداد: کد بلیت، وضعیت (قطعی/لیست انتظار/لغو)، یادآوری |
+
+زمان رویدادها به‌صورت میلی‌ثانیه‌ای (UTC) ذخیره می‌شود که ساعت دیواری ایران را در خود دارد؛ تبدیل شمسی
+در `lib/jalali.ts` روی هر دو لبه انجام می‌شود.
+
+مسیر رویداد:
+
+```
+ثبت رویداد (PENDING) → تأیید مدیر در /console/events → منتشر (PUBLISHED)
+→ ثبت‌نام کاربر (CONFIRMED یا WAITLIST) → لغو ثبت‌نام → آزاد شدن صندلی نفر بعدی
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## ساختار پوشه‌ها
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+app/
+├── layout.tsx              # Root layout (RTL، فونت محلی Morabba، Toaster، متادیتا)
+├── globals.css             # توکن‌های طراحی + Tailwind v4
+├── not-found.tsx           # صفحه ۴۰۴
+├── (marketing)/            # گروه روت برای صفحه اصلی (هدر/فوتر مشترک)
+│   ├── layout.tsx
+│   └── page.tsx            # Landing page ( با انیمیشن Reveal )
+├── console/                # کنسول ادمین
+│   ├── layout.tsx          # سایدبار + تاپ‌بار ادمین
+│   └── page.tsx
+└── dashboard/              # پنل کاربر
+    ├── layout.tsx          # هدر + زیرناوبری کاربر
+    └── page.tsx
 
-## Learn More
+components/
+├── layout/                 # SiteHeader, SiteFooter, MobileTabBar, BrandMark
+├── landing/                # Hero, SearchBar, MatchmakingSection, EventCard, ...
+├── auth/                   # AddEventButton (مودال ورود: شماره → کد OTP)
+└── ui/                     # Reveal (انیمیشن ورود بخش‌ها)
 
-To learn more about Next.js, take a look at the following resources:
+public/fonts/Morabba/       # فونت محلی Morabba (۸ وزن، از طریق next/font/local)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+lib/
+├── data.ts                 # داده‌های نمایشی (لندینگ و گزارش‌ها) + متن بلند رویدادهای نمونه
+├── events.ts               # لایه دسترسی داده‌ی رویدادها (خواندن‌های کش‌شده با `use cache`)
+├── jalali.ts               # تبدیل تاریخ شمسی ⇄ Date
+├── seed-events.ts          # فهرست رویدادهای اولیه (منبع اسکریپت seed)
+├── event-types.ts          # شکل داده‌هایی که به مرورگر می‌روند
+└── utils.ts                # تبدیل اعداد فارسی و قالب‌بندی قیمت
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## امکانات کلیدی UI
 
-## Deploy on Vercel
+- **مودال «ورود»** با دو بخش: سمت راست بنر گرادیانی و سمت چپ فرم شماره موبایل —
+  بعد از ارسال شماره، بخش کد OTP با تایمر شمارش معکوس برای «ارسال مجدد» نمایش داده می‌شود
+  و نتیجه ورود (Mock) با نوتیفیکیشن اعلام می‌شود. (کد نمایشی: `۱۲۳۴۵۶`)
+- **نوتیفیکیشن‌ها** با کتابخانه [`sileo`](https://sileo.aaryan.design) (`<Toaster />` در root layout).
+- **انیمیشن‌ها** با `framer-motion`: ورود نرم بخش‌ها (`Reveal`)، نوارهای ظرفیت،
+  تعویض تب رویدادها و ورود/خروج مودال.
+- **فونت محلی Morabba** از `public/fonts` با ۸ وزن (۱۰۰ تا ۹۰۰).
+- **پس‌زمینه‌های رنگی گرادیانی** برای تمام بخش‌های لندینگ (به جای سفید/مشکی).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## اجرا
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm install
+npm run db:push        # ساخت/همگام‌سازی جدول‌ها روی دیتابیس
+npm run db:generate    # تولید Prisma Client
+npm run seed:events    # (اختیاری) افزودن ۱۲ رویداد نمونه — idempotent
+npm run dev
+```
+
+سپس [http://localhost:3000](http://localhost:3000) را باز کنید.
+
+برای ورود به کنسول مدیریت یک حساب ادمین بسازید:
+
+```bash
+ADMIN_PHONE=09120000000 npm run seed:admin
+```
+
+کد ورود (OTP) در حال حاضر فقط در ترمینال سرور چاپ می‌شود — اتصال به درگاه پیامک بعدی انجام می‌شود.

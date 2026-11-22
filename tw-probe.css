@@ -1,0 +1,5 @@
+@import "tailwindcss";
+@theme inline {
+  --font-sans: var(--font-morabba), "Vazirmatn", "Tahoma", ui-sans-serif, system-ui, sans-serif;
+  --color-canvas: #f8f9ff;
+}
