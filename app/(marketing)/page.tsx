@@ -5,6 +5,7 @@ import EventsSection from "@/components/landing/EventsSection";
 import HowItWorks from "@/components/landing/HowItWorks";
 import CategoryGrid from "@/components/landing/CategoryGrid";
 import OrganizerCTA from "@/components/landing/OrganizerCTA";
+import FAQ from "@/components/landing/FAQ";
 import Testimonials from "@/components/landing/Testimonials";
 import Reveal from "@/components/ui/Reveal";
 import { getSiteAnnouncement } from "@/lib/announcement";
@@ -47,6 +48,9 @@ export default async function HomePage() {
       </Reveal>
       <Reveal>
         <OrganizerCTA />
+      </Reveal>
+      <Reveal>
+        <FAQ />
       </Reveal>
       <Reveal>
         <Testimonials />
