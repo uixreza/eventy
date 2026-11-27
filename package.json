@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "node --env-file=.env server.mjs",
-    "build": "next build",
+    "build": "prisma generate && next build",
+    "vercel-build": "npm run build",
     "start": "node --env-file=.env server.mjs --production",
     "lint": "eslint",
     "db:push": "prisma db push",
