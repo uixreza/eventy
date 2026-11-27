@@ -73,10 +73,18 @@ export async function requestOtp(rawPhone: string): Promise<OtpRequestResult> {
   });
 
   /* TODO: hand the code to an SMS gateway. For now it only lives here —
-     in production this must never log the code. */
-  console.log(`\n  [OTP] ${phone} → ${code}  (valid ${OTP_TTL_SECONDS / 60} min)\n`);
+     in production this must never log the code. In development we also hand
+     it back to the modal so another device can sign in without a terminal. */
+  const development = process.env.NODE_ENV === "development";
+  if (development) {
+    console.log(`\n  [OTP] ${phone} → ${code}  (valid ${OTP_TTL_SECONDS / 60} min)\n`);
+  }
 
-  return { ok: true, isNew: account === null };
+  return {
+    ok: true,
+    isNew: account === null,
+    ...(development ? { devCode: code } : {}),
+  };
 }
 
 /** Step 2 — check the code the user typed and stamp it as proven. */

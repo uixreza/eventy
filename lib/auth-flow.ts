@@ -23,7 +23,16 @@ export const RESEND_SECONDS = 60;
 export const OTP_MAX_ATTEMPTS = 5;
 
 export type OtpRequestResult =
-  | { ok: true; isNew: boolean }
+  | {
+      ok: true;
+      isNew: boolean;
+      /**
+       * Development-only convenience: the freshly issued code, so the modal
+       * can prefill the OTP boxes when signing in from another device. Never
+       * present in a production build.
+       */
+      devCode?: string;
+    }
   | { ok: false; error: string };
 
 export type OtpVerifyResult = { ok: true } | { ok: false; error: string };

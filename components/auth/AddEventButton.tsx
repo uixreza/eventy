@@ -74,6 +74,13 @@ function faClock(totalSeconds: number): string {
   return toFa(`${m}:${String(s).padStart(2, "0")}`);
 }
 
+/** Development-only: prefill from the code the server action handed back. */
+function initialDigits(devCode?: string): string[] {
+  return devCode && devCode.length === OTP_LENGTH
+    ? devCode.split("")
+    : Array(OTP_LENGTH).fill("");
+}
+
 /**
  * The sign-in / sign-up modal (phone → OTP → profile).
  *
@@ -94,6 +101,7 @@ export function AuthModal({
   const [phone, setPhone] = useState("");
   const [isNew, setIsNew] = useState(false);
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(""));
+  const [autoFilled, setAutoFilled] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS);
   const [pending, setPending] = useState(false);
   const [profile, setProfile] = useState({ name: "", nationalId: "", birthDate: "" });
@@ -153,12 +161,15 @@ export function AuthModal({
 
     setPhone(normalized);
     setIsNew(result.isNew);
-    setDigits(Array(OTP_LENGTH).fill(""));
+    setDigits(initialDigits(result.devCode));
+    setAutoFilled(Boolean(result.devCode));
     setSecondsLeft(RESEND_SECONDS);
     setStep("otp");
     sileo.info({
       title: "کد تایید ارسال شد",
-      description: `کد ${toFa(OTP_LENGTH)} رقمی به شمارهٔ ${toFa(normalized)} پیامک شد. (نسخهٔ فعلی: کد در ترمینال سرور نمایش داده می‌شود)`,
+      description: result.devCode
+        ? `کد ${toFa(OTP_LENGTH)} رقمی به شمارهٔ ${toFa(normalized)} پیامک شد. (حالت تست: کد به طور خودکار وارد شد)`
+        : `کد ${toFa(OTP_LENGTH)} رقمی به شمارهٔ ${toFa(normalized)} پیامک شد. (نسخهٔ فعلی: کد در ترمینال سرور نمایش داده می‌شود)`,
     });
   }
 
@@ -194,6 +205,7 @@ export function AuthModal({
     if (!result.ok) {
       sileo.error({ title: "کد تایید نادرست است", description: result.error });
       setDigits(Array(OTP_LENGTH).fill(""));
+      setAutoFilled(false);
       otpRefs.current[0]?.focus();
       return;
     }
@@ -229,6 +241,7 @@ export function AuthModal({
         });
         setStep("phone");
         setDigits(Array(OTP_LENGTH).fill(""));
+        setAutoFilled(false);
         return;
       }
 
@@ -292,12 +305,15 @@ export function AuthModal({
       return;
     }
 
-    setDigits(Array(OTP_LENGTH).fill(""));
+    setDigits(initialDigits(result.devCode));
+    setAutoFilled(Boolean(result.devCode));
     setSecondsLeft(RESEND_SECONDS);
     otpRefs.current[0]?.focus();
     sileo.info({
       title: "کد جدید ارسال شد",
-      description: `کد تایید تازه به شمارهٔ ${toFa(phone)} پیامک شد.`,
+      description: result.devCode
+        ? `کد تایید تازه به شمارهٔ ${toFa(phone)} پیامک شد. (حالت تست: کد به طور خودکار وارد شد)`
+        : `کد تایید تازه به شمارهٔ ${toFa(phone)} پیامک شد.`,
     });
   }
 
@@ -530,6 +546,12 @@ export function AuthModal({
                     </span>{" "}
                     ارسال شد.
                   </p>
+
+                  {autoFilled && (
+                    <p className="mt-2 text-xs font-bold text-amber-600 dark:text-amber-400">
+                      حالت تست: کد تایید به طور خودکار وارد شد.
+                    </p>
+                  )}
 
                   {/* OTP boxes — LTR so the code reads left → right */}
                   <div dir="ltr" className="mt-5 flex gap-2 sm:gap-2.5">
