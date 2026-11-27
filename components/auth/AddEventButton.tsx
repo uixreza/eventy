@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -68,17 +68,15 @@ const bannerBullets = [
   "یادآوری پیامکی خودکار برای ثبت‌نام‌ها",
 ];
 
+/* Hydration-safe "is this the browser?" — avoids writing state in an effect. */
+const subscribeOnce = () => () => {};
+const clientOnly = () => true;
+const serverOnly = () => false;
+
 function faClock(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
   return toFa(`${m}:${String(s).padStart(2, "0")}`);
-}
-
-/** Development-only: prefill from the code the server action handed back. */
-function initialDigits(devCode?: string): string[] {
-  return devCode && devCode.length === OTP_LENGTH
-    ? devCode.split("")
-    : Array(OTP_LENGTH).fill("");
 }
 
 /**
@@ -101,11 +99,13 @@ export function AuthModal({
   const [phone, setPhone] = useState("");
   const [isNew, setIsNew] = useState(false);
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(""));
-  const [autoFilled, setAutoFilled] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS);
   const [pending, setPending] = useState(false);
   const [profile, setProfile] = useState({ name: "", nationalId: "", birthDate: "" });
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+  /* The modal portals into `document.body`, so it can only render after
+     hydration — the auth page mounts it open, including during SSR. */
+  const mounted = useSyncExternalStore(subscribeOnce, clientOnly, serverOnly);
 
   /* On phones the dialog becomes a bottom sheet (banner hidden, slides up). */
   const isSheet =
@@ -161,15 +161,27 @@ export function AuthModal({
 
     setPhone(normalized);
     setIsNew(result.isNew);
-    setDigits(initialDigits(result.devCode));
-    setAutoFilled(Boolean(result.devCode));
+    setDigits(Array(OTP_LENGTH).fill(""));
     setSecondsLeft(RESEND_SECONDS);
     setStep("otp");
     sileo.info({
-      title: "کد تایید ارسال شد",
-      description: result.devCode
-        ? `کد ${toFa(OTP_LENGTH)} رقمی به شمارهٔ ${toFa(normalized)} پیامک شد. (حالت تست: کد به طور خودکار وارد شد)`
-        : `کد ${toFa(OTP_LENGTH)} رقمی به شمارهٔ ${toFa(normalized)} پیامک شد. (نسخهٔ فعلی: کد در ترمینال سرور نمایش داده می‌شود)`,
+      title: result.devCode ? "کد تایید (حالت تست)" : "کد تایید ارسال شد",
+      description: result.devCode ? (
+        <span className="flex flex-col gap-1">
+          <span>
+            کد {toFa(OTP_LENGTH)} رقمی به شمارهٔ {toFa(normalized)} ارسال شد.
+          </span>
+          <span
+            dir="ltr"
+            className="text-base font-extrabold tracking-widest text-blue-600 dark:text-blue-400"
+          >
+            {result.devCode}
+          </span>
+        </span>
+      ) : (
+        `کد ${toFa(OTP_LENGTH)} رقمی به شمارهٔ ${toFa(normalized)} پیامک شد. (نسخهٔ فعلی: کد در ترمینال سرور نمایش داده می‌شود)`
+      ),
+      duration: result.devCode ? 30_000 : undefined,
     });
   }
 
@@ -205,7 +217,6 @@ export function AuthModal({
     if (!result.ok) {
       sileo.error({ title: "کد تایید نادرست است", description: result.error });
       setDigits(Array(OTP_LENGTH).fill(""));
-      setAutoFilled(false);
       otpRefs.current[0]?.focus();
       return;
     }
@@ -241,7 +252,6 @@ export function AuthModal({
         });
         setStep("phone");
         setDigits(Array(OTP_LENGTH).fill(""));
-        setAutoFilled(false);
         return;
       }
 
@@ -305,15 +315,25 @@ export function AuthModal({
       return;
     }
 
-    setDigits(initialDigits(result.devCode));
-    setAutoFilled(Boolean(result.devCode));
+    setDigits(Array(OTP_LENGTH).fill(""));
     setSecondsLeft(RESEND_SECONDS);
     otpRefs.current[0]?.focus();
     sileo.info({
-      title: "کد جدید ارسال شد",
-      description: result.devCode
-        ? `کد تایید تازه به شمارهٔ ${toFa(phone)} پیامک شد. (حالت تست: کد به طور خودکار وارد شد)`
-        : `کد تایید تازه به شمارهٔ ${toFa(phone)} پیامک شد.`,
+      title: result.devCode ? "کد جدید (حالت تست)" : "کد جدید ارسال شد",
+      description: result.devCode ? (
+        <span className="flex flex-col gap-1">
+          <span>کد تایید تازه به شمارهٔ {toFa(phone)} ارسال شد.</span>
+          <span
+            dir="ltr"
+            className="text-base font-extrabold tracking-widest text-blue-600 dark:text-blue-400"
+          >
+            {result.devCode}
+          </span>
+        </span>
+      ) : (
+        `کد تایید تازه به شمارهٔ ${toFa(phone)} پیامک شد.`
+      ),
+      duration: result.devCode ? 30_000 : undefined,
     });
   }
 
@@ -365,6 +385,8 @@ export function AuthModal({
       otpRefs.current[index - 1]?.focus();
     }
   }
+
+  if (!mounted) return null;
 
   /* Portaled to <body> so the sticky header's backdrop-filter can't become
      the containing block for this fixed-position overlay. */
@@ -546,12 +568,6 @@ export function AuthModal({
                     </span>{" "}
                     ارسال شد.
                   </p>
-
-                  {autoFilled && (
-                    <p className="mt-2 text-xs font-bold text-amber-600 dark:text-amber-400">
-                      حالت تست: کد تایید به طور خودکار وارد شد.
-                    </p>
-                  )}
 
                   {/* OTP boxes — LTR so the code reads left → right */}
                   <div dir="ltr" className="mt-5 flex gap-2 sm:gap-2.5">

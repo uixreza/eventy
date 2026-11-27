@@ -21,10 +21,10 @@ type OrbitNode = {
   icon: LucideIcon;
   color: string;
   label: string;
-  /** Base = small screens (corner slots), `lg:` = side slots along the rings. */
+  /** Side slots along the rings; the badges are hidden on small screens. */
   position: string;
   delay: string;
-  /** The two extra nodes only join at lg so mobile keeps 4 compact nodes. */
+  /** The two extra nodes only join at lg. */
   extra?: boolean;
 };
 
@@ -33,28 +33,28 @@ const orbitNodes: OrbitNode[] = [
     icon: Cpu,
     color: "text-blue-500 dark:text-blue-400",
     label: "هوش مصنوعی",
-    position: "left-[12%] top-[3%] lg:left-[17%] lg:top-[19%]",
+    position: "left-[17%] top-[19%]",
     delay: "0s",
   },
   {
     icon: Rocket,
     color: "text-orange-500 dark:text-orange-400",
     label: "استارتاپ",
-    position: "left-[88%] top-[3%] lg:left-[83%] lg:top-[19%]",
+    position: "left-[83%] top-[19%]",
     delay: "1.4s",
   },
   {
     icon: Braces,
     color: "text-cyan-500 dark:text-cyan-400",
     label: "کدنویسی",
-    position: "left-[12%] top-[97%] lg:left-[18%] lg:top-[71%]",
+    position: "left-[18%] top-[71%]",
     delay: "2.2s",
   },
   {
     icon: BookOpen,
     color: "text-emerald-500 dark:text-emerald-400",
     label: "کتاب و فرهنگ",
-    position: "left-[88%] top-[97%] lg:left-[82%] lg:top-[71%]",
+    position: "left-[82%] top-[71%]",
     delay: "0.7s",
   },
   {
@@ -192,8 +192,8 @@ export default function Hero({ categories }: { categories: PublicCategory[] }) {
 
             {/* Sub-headline */}
             <p className="mt-4 max-w-xl text-center text-base leading-relaxed text-slate-600 dark:text-slate-400 md:text-lg">
-              از هکاتون‌های هوش مصنوعی تا ورکشاپ‌های تخصصی دیزاین؛ رویداد مورد علاقه‌تان را
-              پیدا کنید، ظرفیت دورهمی را تکمیل کنید و بدون دغدغه شرکت کنید.
+              از ورکشاپ تا همایش،
+              دورهمی مورد علاقهات رو پیدا کن و خیلی ساده ثبت نام کن.
             </p>
 
             {/* CTA group */}
@@ -249,7 +249,7 @@ export default function Hero({ categories }: { categories: PublicCategory[] }) {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                      علی رضایی به هکاتون هوش مصنوعی پیوست
+                      علی رضایی به ورکشاپ طراحی محصول پیوست
                     </p>
                     <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
                       ۲ دقیقه پیش • ظرفیت تکمیل شد: ۳ از ۴ نفر
@@ -270,8 +270,8 @@ export default function Hero({ categories }: { categories: PublicCategory[] }) {
             return (
               <div
                 key={node.label}
-                className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 ${
-                  node.extra ? "hidden lg:block" : ""
+                className={`absolute z-10 hidden -translate-x-1/2 -translate-y-1/2 ${
+                  node.extra ? "lg:block" : "md:block"
                 } ${node.position}`}
               >
                 <span

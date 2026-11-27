@@ -28,7 +28,7 @@ export type OtpRequestResult =
       isNew: boolean;
       /**
        * Development-only convenience: the freshly issued code, so the modal
-       * can prefill the OTP boxes when signing in from another device. Never
+       * can show it in a toast when signing in from another device. Never
        * present in a production build.
        */
       devCode?: string;

@@ -43,10 +43,12 @@ export default async function proxy(request: NextRequest) {
 
   const session = await readSession(request);
 
-  /* No (valid) session → back to the marketing site, where the phone/OTP
-     modal lives. */
+  /* No (valid) session → the auth page. It opens the same phone/OTP modal as
+     the marketing CTAs, then returns to the route the visitor asked for. */
   if (!session?.id) {
-    return NextResponse.redirect(new URL("/", request.nextUrl));
+    const authUrl = new URL("/auth", request.nextUrl);
+    authUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+    return NextResponse.redirect(authUrl);
   }
 
   /* /console is admin-only; everyone else belongs in their own dashboard. */
