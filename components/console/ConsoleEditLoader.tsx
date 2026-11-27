@@ -8,10 +8,20 @@ import type { EventFormValues } from "@/components/dashboard/NewEventForm";
 import { WizardSkeleton } from "@/components/dashboard/Skeletons";
 import { useServerData } from "@/components/dashboard/useServerData";
 import type { ConsoleEventDetail } from "@/lib/event-types";
+import { eventMapCenter } from "@/lib/map";
 import { fetchConsoleEvent } from "./console-api";
 
 /** The form's starting values, lifted out of the full event row. */
 function toInitial(event: ConsoleEventDetail): EventFormValues {
+  /* Older in-person rows have no pin; start from the city centre in that case. */
+  const pin =
+    event.mode === "ONLINE"
+      ? null
+      : eventMapCenter(event.city, {
+          lat: event.latitude ?? Number.NaN,
+          lng: event.longitude ?? Number.NaN,
+        });
+
   return {
     id: event.id,
     title: event.title,
@@ -19,12 +29,17 @@ function toInitial(event: ConsoleEventDetail): EventFormValues {
     description: event.description || event.summary,
     city: event.city,
     venue: event.venue,
+    latitude: pin?.lat ?? null,
+    longitude: pin?.lng ?? null,
     onlineUrl: event.onlineUrl ?? "",
     capacity: event.capacity,
     highlights: event.highlights,
     agenda: event.agenda,
     price: event.price,
     gradient: event.gradient,
+    images: event.images,
+    needsPhotographyTeam: event.needsPhotographyTeam,
+    promoted: event.promoted,
     mode: event.mode,
     jy: event.jy,
     jm: event.jm,
@@ -43,9 +58,11 @@ function toInitial(event: ConsoleEventDetail): EventFormValues {
 export default function ConsoleEditLoader({
   id,
   categoryIcons,
+  promotionPrice,
 }: {
   id: string;
   categoryIcons: Record<string, string>;
+  promotionPrice: number;
 }) {
   const { data, loaded, failed, reload } = useServerData(() => fetchConsoleEvent(id));
 
@@ -75,6 +92,7 @@ export default function ConsoleEditLoader({
       /* The preview card names the real host, not the admin editing it. */
       organizerName={data.organizerName || data.organizer?.name || ""}
       categoryIcons={categoryIcons}
+      promotionPrice={promotionPrice}
       /* An admin ends up back in the console, not in their own dashboard. */
       returnTo={{ href: "/console/events", label: "بازگشت به مدیریت رویدادها" }}
     />

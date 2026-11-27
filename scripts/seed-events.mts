@@ -10,6 +10,7 @@
 import { PrismaClient } from "@prisma/client";
 import { toGregorian } from "jalaali-js";
 import { browseEventDetails } from "../lib/event-copy.ts";
+import { eventMapCenter } from "../lib/map.ts";
 import { seedEvents } from "../lib/seed-events.ts";
 
 const prisma = new PrismaClient();
@@ -44,6 +45,9 @@ try {
       category: event.category,
       city: event.city,
       venue: event.venue,
+      /* Seeded in-person events get their city centre as the initial pin. */
+      latitude: event.mode === "ONLINE" ? null : eventMapCenter(event.city).lat,
+      longitude: event.mode === "ONLINE" ? null : eventMapCenter(event.city).lng,
       mode: event.mode,
       startsAt: startsAt(event),
       capacity: event.capacity,

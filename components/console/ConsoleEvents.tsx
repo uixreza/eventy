@@ -107,7 +107,7 @@ export default function ConsoleEvents({
             className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition-colors duration-200 ${
               filter === item.key
                 ? "bg-blue-600 text-white shadow-sm"
-                : "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-blue-700 dark:hover:text-blue-400"
+                : "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-700 dark:hover:text-blue-400"
             }`}
           >
             {item.label}

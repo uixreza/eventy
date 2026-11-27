@@ -7,25 +7,62 @@ import { useEffect, useRef } from "react";
 import {
   ArrowRightLeft,
   BarChart3,
+  Flag,
   LayoutDashboard,
+  LifeBuoy,
   LogOut,
   Megaphone,
+  PanelTop,
   Settings,
   Tags,
   Users,
 } from "lucide-react";
 import { sileo } from "sileo";
+import type { LucideIcon } from "lucide-react";
+import type { ConsoleNavCounts } from "@/lib/console-types";
+import NotificationsBadge from "@/components/dashboard/NotificationsBadge";
 import { confirmSignOut } from "@/components/ui/ConfirmSignOut";
 import { BrandMark } from "@/components/layout/BrandMark";
 import ThemeToggle from "@/components/layout/ThemeToggle";
+import { useConsoleNavCounts } from "./useConsoleNavCounts";
 
-const navItems = [
+type NavItem = {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  countKey?: keyof ConsoleNavCounts;
+  /** Read aloud by screen readers next to the number. */
+  badgeLabel?: string;
+};
+
+const navItems: NavItem[] = [
   { label: "نمای کلی", href: "/console", icon: LayoutDashboard },
-  { label: "مدیریت رویدادها", href: "/console/events", icon: Megaphone },
+  {
+    label: "مدیریت رویدادها",
+    href: "/console/events",
+    icon: Megaphone,
+    countKey: "pendingEvents",
+    badgeLabel: "رویداد در انتظار تأیید",
+  },
   { label: "کاربران", href: "/console/users", icon: Users },
   { label: "دسته‌بندی‌ها", href: "/console/categories", icon: Tags },
+  { label: "تبلیغات", href: "/console/ads", icon: PanelTop },
   { label: "گزارش‌ها", href: "/console/reports", icon: BarChart3 },
-  { label: "تراکنش‌ها", href: "/console/transactions", icon: ArrowRightLeft },
+  {
+    label: "گزارش رویدادها",
+    href: "/console/event-reports",
+    icon: Flag,
+    countKey: "eventReports",
+    badgeLabel: "گزارش رویداد",
+  },
+  {
+    label: "تیکت",
+    href: "/console/tickets",
+    icon: LifeBuoy,
+    countKey: "openTickets",
+    badgeLabel: "تیکت در انتظار پاسخ",
+  },
+  { label: "تراکنش\u200cها", href: "/console/transactions", icon: ArrowRightLeft },
   { label: "تنظیمات", href: "/console/settings", icon: Settings },
 ];
 
@@ -37,6 +74,7 @@ type ConsoleShellProps = {
 
 export default function ConsoleShell({ user, children }: ConsoleShellProps) {
   const pathname = usePathname();
+  const counts = useConsoleNavCounts();
   const initial = user.name.trim().charAt(0) || "م";
   const mainRef = useRef<HTMLElement>(null);
 
@@ -70,7 +108,7 @@ export default function ConsoleShell({ user, children }: ConsoleShellProps) {
         <div className="flex h-16 items-center border-b border-white/10 px-5">
           <Link href="/" className="text-lg">
             <span className="font-extrabold tracking-tight text-white">
-              رویداد<span className="text-blue-400">شو</span>
+              <span className="text-blue-400">Kooja</span>
             </span>
             <span className="ms-2 rounded-md bg-red-500/90 px-1.5 py-0.5 align-middle text-[10px] font-bold text-white">
               کنسول
@@ -96,7 +134,14 @@ export default function ConsoleShell({ user, children }: ConsoleShellProps) {
                 }`}
               >
                 <Icon className="h-[18px] w-[18px]" />
-                {item.label}
+                <span className="min-w-0 truncate">{item.label}</span>
+                {item.countKey && (
+                  <NotificationsBadge
+                    count={counts[item.countKey]}
+                    label={item.badgeLabel}
+                    className="ms-auto shrink-0 ring-2 ring-slate-900"
+                  />
+                )}
               </Link>
             );
           })}
@@ -122,7 +167,7 @@ export default function ConsoleShell({ user, children }: ConsoleShellProps) {
               <BrandMark />
             </Link>
             <h1 className="min-w-0 truncate text-sm font-bold text-slate-800 dark:text-slate-100 sm:text-base">
-              کنسول مدیریت رویدادشو
+              کنسول مدیریت Kooja
             </h1>
           </div>
           <div className="flex shrink-0 items-center gap-3">
@@ -164,13 +209,20 @@ export default function ConsoleShell({ user, children }: ConsoleShellProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition-colors duration-200 ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors duration-200 ${
                   active
                     ? "bg-blue-600 text-white"
                     : "border border-slate-200 text-slate-600 hover:border-blue-200 dark:border-slate-700 dark:text-slate-300 dark:hover:border-blue-800"
                 }`}
               >
                 {item.label}
+                {item.countKey && (
+                  <NotificationsBadge
+                    count={counts[item.countKey]}
+                    label={item.badgeLabel}
+                    className="shrink-0"
+                  />
+                )}
               </Link>
             );
           })}

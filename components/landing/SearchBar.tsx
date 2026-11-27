@@ -3,16 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LayoutGrid, MapPin, Search } from "lucide-react";
+import type { PublicCategory } from "@/lib/categories";
 
 const cities = ["همه شهرها (و آنلاین)", "تهران", "مشهد", "اصفهان", "شیراز", "تبریز", "آنلاین"];
-const topics = [
-  "همه موضوعات",
-  "فناوری و AI",
-  "کسب‌وکار",
-  "دورهمی‌های دوستانه",
-  "وبینارهای آنلاین",
-  "هنر و دیزاین",
-];
+const ALL_TOPICS = "همه موضوعات";
 
 function Select({
   icon: Icon,
@@ -65,12 +59,15 @@ function Select({
  *
  * It hands the query, the city and the topic to the real browse page
  * (`/events`), which reads them from the URL — so a search here ends up in
- * the list of published events with its filters applied.
+ * the list of published events with its filters applied. Topics are the
+ * visible rows of the `Category` table, passed down from the server, so a
+ * category added or hidden in the console shows up here too.
  */
-export default function SearchBar() {
+export default function SearchBar({ categories }: { categories: PublicCategory[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [city, setCity] = useState(cities[0]);
+  const topics = [ALL_TOPICS, ...categories.map((category) => category.name)];
   const [topic, setTopic] = useState(topics[0]);
 
   function handleSubmit(event: React.FormEvent) {
@@ -79,7 +76,7 @@ export default function SearchBar() {
     const params = new URLSearchParams();
     if (query.trim()) params.set("q", query.trim());
     if (!city.startsWith("همه")) params.set("city", city);
-    if (!topic.startsWith("همه")) params.set("category", topic);
+    if (topic !== ALL_TOPICS) params.set("category", topic);
 
     const search = params.toString();
     router.push(search ? `/events?${search}` : "/events");

@@ -10,6 +10,7 @@ import {
   Bell,
   Heart,
   LayoutDashboard,
+  LifeBuoy,
   LogOut,
   Menu,
   Settings,
@@ -18,7 +19,8 @@ import {
 } from "lucide-react";
 import { sileo } from "sileo";
 import { confirmSignOut } from "@/components/ui/ConfirmSignOut";
-import NotificationsDot from "@/components/dashboard/NotificationsDot";
+import NotificationsBadge from "@/components/dashboard/NotificationsBadge";
+import { useUnreadNotifications } from "@/components/dashboard/useUnreadNotifications";
 import { BrandMark } from "@/components/layout/BrandMark";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import LocationPicker from "@/components/layout/LocationPicker";
@@ -27,6 +29,7 @@ import { useLocation } from "@/components/layout/LocationProvider";
 const navItems = [
   { label: "نمای کلی", href: "/dashboard", icon: LayoutDashboard },
   { label: "رویدادهای من", href: "/dashboard/events", icon: Ticket },
+  { label: "تیکت", href: "/dashboard/tickets", icon: LifeBuoy },
   { label: "علاقه‌مندی‌ها", href: "/dashboard/saved", icon: Heart },
   { label: "اعلان‌ها", href: "/dashboard/notifications", icon: Bell },
   { label: "تنظیمات", href: "/dashboard/settings", icon: Settings },
@@ -46,6 +49,7 @@ type DashboardShellProps = {
 
 export default function DashboardShell({ user, children }: DashboardShellProps) {
   const pathname = usePathname();
+  const unreadCount = useUnreadNotifications();
   const [menuOpen, setMenuOpen] = useState(false);
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -150,7 +154,7 @@ export default function DashboardShell({ user, children }: DashboardShellProps) 
               </Link>
             )}
             <Link
-              href="/#events"
+              href="/events"
               className="hidden rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-all duration-200 hover:bg-blue-700 sm:block"
             >
               کشف رویدادها
@@ -199,7 +203,10 @@ export default function DashboardShell({ user, children }: DashboardShellProps) 
             className="relative rounded-full p-2 text-slate-600 transition-all duration-200 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
           >
             <Bell className="h-5 w-5" />
-            <NotificationsDot />
+            <NotificationsBadge
+              count={unreadCount}
+              className="absolute -end-1 -top-1 ring-2 ring-white dark:ring-slate-900"
+            />
           </Link>
 
           <AnimatePresence>
@@ -270,13 +277,19 @@ export default function DashboardShell({ user, children }: DashboardShellProps) 
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`shrink-0 border-b-2 border-transparent px-3.5 py-3 text-xs font-bold transition-colors duration-200 sm:text-sm ${
+                  className={`relative shrink-0 border-b-2 border-transparent px-3.5 py-3 text-xs font-bold transition-colors duration-200 sm:text-sm ${
                     active
                       ? "text-blue-700 dark:text-blue-300"
                       : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
                   }`}
                 >
                   {item.label}
+                  {item.href === "/dashboard/notifications" && (
+                    <NotificationsBadge
+                      count={unreadCount}
+                      className="absolute -end-1.5 -top-1 ring-2 ring-white dark:ring-slate-900"
+                    />
+                  )}
                 </Link>
               );
             })}
@@ -303,7 +316,7 @@ export default function DashboardShell({ user, children }: DashboardShellProps) 
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-5 text-xs text-slate-400 dark:text-slate-500 sm:flex-row sm:px-6">
-          <p>© ۱۴۰۴ رویدادشو — تمامی حقوق محفوظ است.</p>
+          <p>© ۱۴۰۴ Kooja — تمامی حقوق محفوظ است.</p>
           <Link href="/" className="flex items-center gap-1.5 transition-colors hover:text-blue-600 dark:hover:text-blue-400">
             <ArrowRightLeft className="h-3.5 w-3.5 rotate-180" />
             بازگشت به صفحه اصلی

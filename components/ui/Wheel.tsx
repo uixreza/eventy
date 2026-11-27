@@ -27,7 +27,7 @@ const SETTLE_MS = 110;
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-export type WheelItem = { value: number; text: string };
+export type WheelItem = { value: number; text: string; disabled?: boolean };
 
 type WheelProps = {
   /** Accessible name — any visible caption sits outside. */
@@ -92,37 +92,57 @@ export function Wheel({ label, items, selected, onSelect }: WheelProps) {
       const target = clamp(Math.round(el.scrollTop / ITEM_H), 0, items.length - 1);
       const item = items[target];
       if (!item) return;
-      if (item.value !== selected) onSelect(item.value);
+      /* A locked row never becomes the selection — bounce back to the last
+         valid one so the highlight band cannot rest on a past month. */
+      if (item.disabled) snapTo(index);
+      else if (item.value !== selected) onSelect(item.value);
       else snapTo(target);
     }, SETTLE_MS);
   };
 
+  /** Walks past locked rows in `direction` and returns the next usable row. */
+  const findEnabled = (from: number, direction: number): number | null => {
+    for (let i = from; i >= 0 && i < items.length; i += direction) {
+      if (!items[i].disabled) return i;
+    }
+    return null;
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    let next: number;
+    let from: number;
+    let direction: number;
     switch (event.key) {
       case "ArrowDown":
-        next = index + 1;
+        from = index + 1;
+        direction = 1;
         break;
       case "ArrowUp":
-        next = index - 1;
+        from = index - 1;
+        direction = -1;
         break;
       case "PageDown":
-        next = index + 5;
+        from = index + 5;
+        direction = 1;
         break;
       case "PageUp":
-        next = index - 5;
+        from = index - 5;
+        direction = -1;
         break;
       case "Home":
-        next = 0;
+        from = 0;
+        direction = 1;
         break;
       case "End":
-        next = items.length - 1;
+        from = items.length - 1;
+        direction = -1;
         break;
       default:
         return;
     }
     event.preventDefault();
-    const item = items[clamp(next, 0, items.length - 1)];
+    const target = findEnabled(clamp(from, 0, items.length - 1), direction);
+    if (target === null) return;
+    const item = items[target];
     if (item && item.value !== selected) onSelect(item.value);
   };
 
@@ -176,13 +196,16 @@ export function Wheel({ label, items, selected, onSelect }: WheelProps) {
             id={`${id}-${item.value}`}
             role="option"
             aria-selected={item.value === selected}
+            aria-disabled={item.disabled || undefined}
             style={{ height: ITEM_H }}
             className={`flex items-center justify-center whitespace-nowrap transition-colors ${
-              distance === 0
-                ? "text-sm font-extrabold text-blue-700 dark:text-blue-300"
-                : distance === 1
-                  ? "text-sm font-semibold text-slate-500 dark:text-slate-400"
-                  : "text-sm font-medium text-slate-300 dark:text-slate-600"
+              item.disabled
+                ? "cursor-not-allowed text-slate-300 opacity-40 dark:text-slate-600"
+                : distance === 0
+                  ? "text-sm font-extrabold text-blue-700 dark:text-blue-300"
+                  : distance === 1
+                    ? "text-sm font-semibold text-slate-500 dark:text-slate-400"
+                    : "text-sm font-medium text-slate-300 dark:text-slate-600"
             }`}
           >
             {item.text}

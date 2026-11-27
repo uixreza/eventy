@@ -180,7 +180,7 @@ export async function getDashboardNotifications(
       id: `broadcast:${broadcast.id}`,
       kind: "broadcast",
       title: broadcast.title,
-      description: broadcast.body || "اعلان سراسری رویدادشو",
+      description: broadcast.body || "اعلان سراسری Kooja",
       at: broadcast.createdAt.toISOString(),
       ...timing(broadcast.createdAt, now),
     });

@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { Bookmark, Clock, MapPin, User } from "lucide-react";
+import { Bookmark, Clock, Crown, MapPin, User, Video } from "lucide-react";
 import { categoryIcon } from "@/lib/category-icons";
 import { eventStatusMeta } from "@/lib/data";
 import type { EventCard } from "@/lib/event-types";
 import { faPrice, toFa } from "@/lib/utils";
+import EventListCover from "./EventListCover";
+import ShareEventButton from "./ShareEventButton";
 
 type EventListCardProps = {
   event: EventCard;
@@ -21,15 +23,31 @@ type EventListCardProps = {
 export default function EventListCard({ event, saved, onToggleSave }: EventListCardProps) {
   const status = eventStatusMeta[event.status];
   const CategoryIcon = categoryIcon(event.categoryIcon).icon;
+  const isOnline = event.city === "آنلاین";
 
   return (
-    <article className="group relative flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-800 sm:flex-row sm:gap-4 sm:p-4">
+    <article
+      className={`group relative flex flex-col gap-3 rounded-2xl border p-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:flex-row sm:gap-4 sm:p-4 ${
+        event.promoted
+          ? "border-amber-400/80 bg-gradient-to-br from-amber-50 via-white to-amber-100/70 shadow-[0_0_0_1px_rgba(251,191,36,0.35),0_12px_32px_-14px_rgba(180,83,9,0.45)] ring-1 ring-amber-300/70 hover:border-amber-500 dark:from-slate-900 dark:via-slate-900 dark:to-amber-950/40 dark:shadow-[0_0_0_1px_rgba(251,191,36,0.18),0_12px_32px_-14px_rgba(251,191,36,0.25)] dark:ring-amber-800/70"
+          : `bg-white dark:bg-slate-900 ${
+              isOnline
+                ? "border-violet-300 ring-1 ring-violet-200 hover:border-violet-400 dark:border-violet-800 dark:ring-violet-900 dark:hover:border-violet-700"
+                : "border-slate-200 hover:border-blue-200 dark:border-slate-700 dark:hover:border-blue-800"
+            }`
+      }`}
+    >
       {/* Thumbnail: full-width banner on mobile, fixed-width column from sm up */}
-      <div className="relative h-36 w-full shrink-0 overflow-hidden rounded-xl sm:h-auto sm:w-40 sm:self-stretch lg:w-44">
-        <div
-          className={`absolute inset-0 bg-gradient-to-br ${event.gradient} transition-transform duration-300 group-hover:scale-105`}
+      <div
+        className={`relative h-36 w-full shrink-0 overflow-hidden rounded-xl sm:h-auto sm:w-40 sm:self-stretch lg:w-44 ${
+          event.promoted ? "ring-2 ring-amber-300/80 dark:ring-amber-700/70" : ""
+        }`}
+      >
+        <EventListCover
+          images={event.images}
+          title={event.title}
+          gradient={event.gradient}
         />
-        <div className="absolute inset-0 bg-black/15" />
 
         {/* The category's glyph, centered on the cover */}
         <span className="absolute inset-0 flex items-center justify-center">
@@ -48,6 +66,14 @@ export default function EventListCard({ event, saved, onToggleSave }: EventListC
           <span className="truncate">{status.label}</span>
         </span>
 
+        {/* Promoted events get a crown and a gold ribbon, unlike every other card. */}
+        {event.promoted && (
+          <span className="absolute end-2 top-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-l from-amber-300 via-yellow-200 to-amber-400 px-2 py-1 text-[10px] font-extrabold text-amber-950 shadow-md ring-1 ring-amber-500/40">
+            <Crown className="h-3 w-3 fill-current" />
+            رویداد ویژه
+          </span>
+        )}
+
         {/* Seats left over the image */}
         {event.status !== "ended" && event.seatsLeft !== null && (
           <span className="absolute bottom-2 end-2 rounded-full bg-white/95 px-2 py-0.5 text-[10px] font-bold text-red-600 backdrop-blur dark:bg-slate-900/95 dark:text-red-400">
@@ -59,7 +85,13 @@ export default function EventListCard({ event, saved, onToggleSave }: EventListC
       {/* Copy (middle / left) */}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex items-start gap-2">
-          <h3 className="line-clamp-2 flex-1 text-sm font-bold leading-6 text-slate-800 transition-colors duration-200 group-hover:text-blue-700 dark:text-slate-100 dark:group-hover:text-blue-300 sm:text-base sm:leading-7">
+          <h3
+            className={`line-clamp-2 flex-1 text-sm font-bold leading-6 transition-colors duration-200 sm:text-base sm:leading-7 ${
+              event.promoted
+                ? "text-amber-900 group-hover:text-amber-700 dark:text-amber-100 dark:group-hover:text-amber-300"
+                : "text-slate-800 group-hover:text-blue-700 dark:text-slate-100 dark:group-hover:text-blue-300"
+            }`}
+          >
             {/* Stretched link: clicking anywhere on the card opens the detail page. */}
             <Link
               href={`/events/${event.slug}`}
@@ -69,18 +101,30 @@ export default function EventListCard({ event, saved, onToggleSave }: EventListC
             </Link>
           </h3>
 
-          {/* Bookmark — pinned to the card's left edge (inline-end in RTL);
-              z-10 keeps it clickable above the stretched link. */}
-          <button
-            type="button"
-            onClick={() => onToggleSave(event)}
-            aria-pressed={saved}
-            aria-label={saved ? "حذف از ذخیره‌شده‌ها" : "ذخیره رویداد"}
-            title={saved ? "حذف از ذخیره‌شده‌ها" : "ذخیره رویداد"}
-            className="relative z-10 ms-auto shrink-0 rounded-full p-1.5 text-slate-400 transition-all duration-200 hover:bg-blue-50 hover:text-blue-600 dark:text-slate-500 dark:hover:bg-blue-950 dark:hover:text-blue-400"
-          >
-            <Bookmark className={`h-4 w-4 ${saved ? "fill-current text-blue-600 dark:text-blue-400" : ""}`} />
-          </button>
+          {/* Save and share — pinned to the card's left edge (inline-end in RTL);
+              z-10 keeps them clickable above the stretched link. */}
+          <div className="relative z-10 ms-auto flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => onToggleSave(event)}
+              aria-pressed={saved}
+              aria-label={saved ? "حذف از ذخیره‌شده‌ها" : "ذخیره رویداد"}
+              title={saved ? "حذف از ذخیره‌شده‌ها" : "ذخیره رویداد"}
+              className={`rounded-full p-1.5 transition-all duration-200 ${
+                event.promoted
+                  ? "text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-500/20"
+                  : "text-slate-400 hover:bg-blue-50 hover:text-blue-600 dark:text-slate-500 dark:hover:bg-blue-950 dark:hover:text-blue-400"
+              }`}
+            >
+              <Bookmark className={`h-4 w-4 ${saved ? "fill-current text-blue-600 dark:text-blue-400" : ""}`} />
+            </button>
+            <ShareEventButton
+              title={event.title}
+              href={`/events/${event.slug}`}
+              compact
+              gold={event.promoted}
+            />
+          </div>
         </div>
 
         <p className="line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400 sm:text-[13px] sm:leading-6">
@@ -88,9 +132,21 @@ export default function EventListCard({ event, saved, onToggleSave }: EventListC
         </p>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-          <span className="rounded-lg bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+          <span
+            className={`rounded-lg px-2 py-0.5 text-[11px] font-bold ${
+              event.promoted
+                ? "bg-amber-100 text-amber-900 ring-1 ring-amber-300/70 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-700/60"
+                : "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+            }`}
+          >
             {event.category}
           </span>
+          {isOnline && (
+            <span className="inline-flex items-center gap-1 rounded-lg bg-violet-50 px-2 py-0.5 text-[11px] font-bold text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+              <Video className="h-3.5 w-3.5 shrink-0" />
+              آنلاین
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <Clock className="h-3.5 w-3.5 shrink-0 text-blue-500 dark:text-blue-400" />
             {event.date} - {event.time}
@@ -107,7 +163,13 @@ export default function EventListCard({ event, saved, onToggleSave }: EventListC
           </span>
         </div>
 
-        <div className="mt-auto flex items-center justify-between gap-3 border-t border-slate-100 pt-2.5 dark:border-slate-800">
+        <div
+          className={`mt-auto flex items-center justify-between gap-3 border-t pt-2.5 ${
+            event.promoted
+              ? "border-amber-200/80 dark:border-amber-800/60"
+              : "border-slate-100 dark:border-slate-800"
+          }`}
+        >
           <div className="min-w-0">
             <p className="truncate text-xs font-bold text-slate-700 dark:text-slate-300">
               {event.price === null ? (
@@ -122,7 +184,11 @@ export default function EventListCard({ event, saved, onToggleSave }: EventListC
           </div>
           <Link
             href={`/events/${event.slug}`}
-            className="relative z-10 shrink-0 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition-all duration-200 hover:bg-blue-700 active:scale-[0.98]"
+            className={`relative z-10 shrink-0 rounded-xl px-3 py-2 text-xs font-bold shadow-sm transition-all duration-200 active:scale-[0.98] ${
+              event.promoted
+                ? "bg-gradient-to-l from-amber-400 to-yellow-300 text-amber-950 hover:from-amber-300 hover:to-yellow-200"
+                : "bg-blue-600 text-white hover:bg-blue-700"
+            }`}
           >
             جزئیات رویداد
           </Link>

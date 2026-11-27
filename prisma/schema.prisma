@@ -15,29 +15,35 @@ enum Role {
 }
 
 model User {
-  id String   @id @default(cuid())
+  id         String    @id @default(cuid())
   /// The single credential we identify people by — Iranian mobile number.
-  phone      String   @unique
+  phone      String    @unique
   /// Full name, collected at signup (step 3 of the auth modal).
   name       String
   /// Iranian national id code (کد ملی), 10 digits, validated on write.
   nationalId String
   /// Stored as a date only — the day of birth, no time component.
-  birthDate  DateTime @db.Date
-  role       Role     @default(USER)
+  birthDate  DateTime  @db.Date
+  role       Role      @default(USER)
   /// Set the moment an admin blocks the account — `null` means active.
   /// A banned person can no longer sign in or open their dashboard.
-  bannedAt DateTime?
+  bannedAt   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   /// Events this user created (organizer side of the platform).
-  hostedEvents   Event[]        @relation("EventOrganizer")
+  hostedEvents    Event[]                @relation("EventOrganizer")
   /// Tickets this user holds.
-  registrations Registration[]
+  registrations   Registration[]
   /// Events this user saved — the heart on the cards.
-  bookmarks      Bookmark[]
+  bookmarks       Bookmark[]
+  /// Reports this user sent about other people's events.
+  eventReports    EventReport[]
+  /// Support conversations opened by this account.
+  supportTickets  SupportTicket[]
+  /// Messages this account wrote, on either side of a support conversation.
+  supportMessages SupportTicketMessage[]
 
   @@index([role])
 }
@@ -78,38 +84,50 @@ enum RegistrationStatus {
 /// wall-clock time (the app only ever shows Jalali times, so the clock is
 /// kept as the person who typed it). `lib/jalali.ts` converts on both edges.
 model Event {
-  id String @id @default(cuid())
+  id                   String      @id @default(cuid())
   /// URL segment of `/events/[slug]` — unique, built from the title.
-  slug String @unique
-  title String
+  slug                 String      @unique
+  title                String
   /// One-line teaser used on cards.
-  summary String @default("")
+  summary              String      @default("")
   /// Long-form description shown on the detail page.
-  description String @default("")
-  category String
-  city String @default("")
-  venue String @default("")
-  mode EventMode @default(INPERSON)
+  description          String      @default("")
+  category             String
+  city                 String      @default("")
+  venue                String      @default("")
+  /// Exact pin picked on the map — only used by in-person events.
+  latitude             Float?
+  longitude            Float?
+  mode                 EventMode   @default(INPERSON)
   /// Streaming link — only revealed to confirmed participants.
-  onlineUrl String?
-  startsAt DateTime
+  onlineUrl            String?
+  startsAt             DateTime
   /// Maximum number of participants — `null` means the organizer left it
   /// undefined, so sign-ups never fill up and no one is waitlisted.
-  capacity Int?
+  capacity             Int?
   /// «چه چیزی در انتظارتان است؟» — the bullets on the event page.
-  highlights String[] @default([])
+  highlights           String[]    @default([])
   /// «برنامه زمانی» — JSON array of `{ time, title }` rows.
-  agenda Json @default("[]")
+  agenda               Json        @default("[]")
   /// Ticket price in Toman — `null` means free.
-  price Int?
+  price                Int?
   /// Tailwind gradient classes of the generated cover.
-  coverGradient String @default("from-blue-600 via-indigo-500 to-purple-600")
-  status EventStatus @default(PENDING)
+  coverGradient        String      @default("from-blue-600 via-indigo-500 to-purple-600")
+  /// Photos of the event, in display order. Each entry is an object key in the
+  /// private Arvan bucket; `GET /api/event-images/[key]` signs a read for it.
+  images               String[]    @default([])
+  /// Answer to the publish-time question. Internal only — the public event
+  /// page never receives or displays it; managers see it in the console.
+  needsPhotographyTeam Boolean     @default(false)
+  /// Organizer asked for the paid top placement. It only takes effect once
+  /// the event is PUBLISHED, so moderation still decides what goes public.
+  promoted             Boolean     @default(false)
+  status               EventStatus @default(PENDING)
   /// The organizer — `null` for the events seeded by the platform.
-  organizerId String?
-  organizer User? @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: SetNull)
+  organizerId          String?
+  organizer            User?       @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: SetNull)
   /// Display name of the organizer, kept even when the account is deleted.
-  organizerName String @default("")
+  organizerName        String      @default("")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -117,6 +135,8 @@ model Event {
   registrations Registration[]
   /// People who saved this event.
   bookmarks     Bookmark[]
+  /// Complaints sent by visitors so the managers can review the listing.
+  reports       EventReport[]
 
   @@index([status, startsAt])
   @@index([organizerId])
@@ -124,20 +144,20 @@ model Event {
 
 /// One ticket: a person joining one event.
 model Registration {
-  id String @id @default(cuid())
-  eventId String
-  userId String
-  status RegistrationStatus @default(CONFIRMED)
+  id         String             @id @default(cuid())
+  eventId    String
+  userId     String
+  status     RegistrationStatus @default(CONFIRMED)
   /// Printed on the ticket — unique across the platform.
-  ticketCode String @unique
+  ticketCode String             @unique
   /// Whether the person asked to be reminded before the event starts.
-  reminder Boolean @default(false)
+  reminder   Boolean            @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   /// One ticket per person per event.
   @@unique([eventId, userId])
@@ -147,36 +167,105 @@ model Registration {
 /// One saved event: the heart a person presses on a card. The list lives in
 /// `/dashboard/saved`; deleting it is «حذف از علاقه‌مندی‌ها».
 model Bookmark {
-  id String @id @default(cuid())
+  id      String @id @default(cuid())
   eventId String
-  userId String
+  userId  String
 
   createdAt DateTime @default(now())
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   /// One save per person per event — pressing the heart twice is a toggle.
   @@unique([eventId, userId])
   @@index([userId, createdAt])
 }
 
+/// A visitor's complaint about an event, sent to the managers for review.
+/// The reason is one of the keys in `lib/event-report-types.ts`; the message is
+/// optional, so someone who only wants to tick a reason can still report.
+model EventReport {
+  id         String   @id @default(cuid())
+  eventId    String
+  reporterId String
+  reason     String
+  message    String?
+  createdAt  DateTime @default(now())
+
+  event    Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  reporter User  @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([eventId])
+}
+
+/// Where a support conversation stands. The owner can write while it is open
+/// or answered; only an admin can close it or open it again.
+enum SupportTicketStatus {
+  OPEN
+  ANSWERED
+  CLOSED
+}
+
+/// Which side of a support conversation wrote a message.
+enum SupportMessageAuthor {
+  USER
+  ADMIN
+}
+
+/// A support request opened from `/dashboard`. The first message is created
+/// with the row, so a ticket always has something for an admin to read.
+model SupportTicket {
+  id        String              @id @default(cuid())
+  subject   String
+  status    SupportTicketStatus @default(OPEN)
+  /// Last time either side wrote — this drives both list orders.
+  updatedAt DateTime            @updatedAt
+  createdAt DateTime            @default(now())
+  closedAt  DateTime?
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  messages SupportTicketMessage[]
+
+  @@index([ownerId, updatedAt])
+  @@index([status, updatedAt])
+}
+
+/// One entry in a support conversation. Denormalizing the author's display
+/// name keeps old messages readable even if the account is later renamed.
+model SupportTicketMessage {
+  id         String               @id @default(cuid())
+  ticketId   String
+  authorId   String
+  authorRole SupportMessageAuthor
+  authorName String
+  body       String
+  createdAt  DateTime             @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
 /// One row per OTP we hand out. A code is created by `requestOtp`, checked by
 /// `verifyOtp` (which stamps `verifiedAt`) and finally consumed by the NextAuth
 /// credentials sign-in, so a code can create at most one session.
 model OtpCode {
-  id        String   @id @default(cuid())
-  phone     String
+  id         String    @id @default(cuid())
+  phone      String
   /// Six digits, stored as a string to keep leading zeros.
-  code      String
-  expiresAt DateTime
+  code       String
+  expiresAt  DateTime
   /// Wrong guesses against this code; 5 locks it out.
-  attempts  Int      @default(0)
+  attempts   Int       @default(0)
   /// Set once the code matched — proof needed before a session is issued.
   verifiedAt DateTime?
   /// Set once a session was created from this code (single use).
   consumedAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   @@index([phone, createdAt])
 }
@@ -198,6 +287,36 @@ model Broadcast {
   @@index([createdAt])
 }
 
+/// The single advertising line pinned above the landing page's hero, plus the
+/// optional image/GIF banner shown between the hero and the hot events.
+/// A fixed id keeps it a singleton: the console upserts this one row, an empty
+/// `text` hides the strip, and a null `bannerKey` hides the banner section.
+/// `link` is optional — when present, the whole strip becomes a link.
+/// `bannerLink` does the same for the banner image below the hero.
+model SiteAnnouncement {
+  id         String    @id @default("primary")
+  text       String    @default("")
+  link       String    @default("")
+  /// Opaque private-bucket object key; the browser never sees a bucket URL.
+  bannerKey  String?
+  /// Optional destination for the banner; empty means the image is not linked.
+  bannerLink String    @default("")
+  updatedAt  DateTime  @updatedAt
+}
+
+/// The site-wide prices edited in `/console/settings`. A fixed id keeps this
+/// a singleton, like `SiteAnnouncement`; a missing row reads as the defaults
+/// below, and an admin save upserts it. `eventPrice` is display-only for now
+/// — the promotion price is the one wired into the event wizard.
+model SitePricing {
+  id             String   @id @default("primary")
+  /// Mock row for a future paid event listing — never written by the console.
+  eventPrice     Int      @default(0)
+  /// Price shown next to the wizard's promotion toggle, in Toman.
+  promotionPrice Int      @default(250000)
+  updatedAt      DateTime @updatedAt
+}
+
 /// One row per event category shown on the site and managed in
 /// `/console/categories`. `name` is unique — the console's create form
 /// rejects a duplicate. `icon` is a key into `lib/category-icons.ts`
@@ -206,7 +325,7 @@ model Broadcast {
 /// their own free-text `category` string — this table is the curated list,
 /// and event counts are derived by grouping `Event.category` on read.
 model Category {
-  id String @id @default(cuid())
+  id        String   @id @default(cuid())
   /// Display name, unique across the table.
   name      String   @unique
   /// Registry key from `lib/category-icons.ts`; defaults to the generic tag.

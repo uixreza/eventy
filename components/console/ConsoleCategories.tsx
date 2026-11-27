@@ -1,9 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, Loader2, Plus, Trash2 } from "lucide-react";
+import { Check, Eye, EyeOff, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { sileo } from "sileo";
-import { createCategory, deleteCategory, setCategoryVisible } from "@/app/actions/category";
+import {
+  createCategory,
+  deleteCategory,
+  renameCategory,
+  setCategoryVisible,
+} from "@/app/actions/category";
 import { confirm } from "@/components/ui/confirm";
 import { categoryIcon, categoryIconKeys, FALLBACK_ICON } from "@/lib/category-icons";
 import type { ConsoleCategory } from "@/lib/category-types";
@@ -34,6 +39,9 @@ export default function ConsoleCategories({
 }) {
   const [newName, setNewName] = useState("");
   const [newIcon, setNewIcon] = useState(FALLBACK_ICON);
+  /** Which category title is being edited, and its in-progress value. */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
   /** The id of the row being mutated (`"new"` = the add form), or null. */
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -61,6 +69,47 @@ export default function ConsoleCategories({
         title: `دسته «${name}» ساخته شد`,
         description: "با آیکون انتخاب‌شده در فهرست دسته‌ها ثبت شد.",
       });
+      onChanged();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function startEditing(row: ConsoleCategory) {
+    if (busy) return;
+    setEditingId(row.id);
+    setDraftName(row.name);
+  }
+
+  function cancelEditing() {
+    setEditingId(null);
+    setDraftName("");
+  }
+
+  async function saveName(row: ConsoleCategory) {
+    if (busy) return;
+    const name = draftName.trim().replace(/\s+/g, " ");
+    if (!name) {
+      sileo.error({ title: "نام دسته را وارد کنید", description: "این فیلد الزامی است." });
+      return;
+    }
+    if (name === row.name) {
+      cancelEditing();
+      return;
+    }
+
+    setBusy(row.id);
+    try {
+      const result = await renameCategory(row.id, name);
+      if (!result.ok) {
+        sileo.error({ title: result.error, description: "دوباره تلاش کنید." });
+        return;
+      }
+      sileo.success({
+        title: `نام دسته به «${name}» تغییر یافت`,
+        description: "عنوان رویدادهای این دسته هم به روز شد.",
+      });
+      cancelEditing();
       onChanged();
     } finally {
       setBusy(null);
@@ -125,7 +174,8 @@ export default function ConsoleCategories({
         </h1>
         <p className="mt-1 text-xs leading-6 text-slate-500 dark:text-slate-400">
           {toFa(visibleCount)} دسته نمایان از {toFa(rows.length)} دسته با مجموع{" "}
-          {toFa(totalEvents)} رویداد؛ دسته جدید بسازید یا نمایش دسته‌ها را کنترل کنید.
+          {toFa(totalEvents)} رویداد؛ دسته بسازید، نام‌شان را ویرایش کنید یا نمایش‌شان را
+          کنترل کنید.
         </p>
       </div>
 
@@ -144,6 +194,7 @@ export default function ConsoleCategories({
             <input
               id="console-new-category"
               type="text"
+              maxLength={60}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="مثلاً معماری و ساختمان"
@@ -207,36 +258,100 @@ export default function ConsoleCategories({
               {toFa(visibleCount)} نمایان
             </span>
           </div>
-          <ul className="mt-3 space-y-1">
+          <ul className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
             {rows.map((row) => {
               const meta = categoryIcon(row.icon);
               const Icon = meta.icon;
+              const isEditing = editingId === row.id;
               return (
                 <li
                   key={row.id}
-                  className="flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                  className="flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50/70 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-white hover:shadow-md dark:border-slate-700 dark:bg-slate-800/40 dark:hover:border-blue-900 dark:hover:bg-slate-800"
                 >
                   <span
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${meta.tint}`}
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${meta.tint}`}
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-3.5 w-3.5" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
-                      {row.name}
-                    </p>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                      {toFa(row.eventCount)} رویداد
-                    </p>
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={draftName}
+                        maxLength={60}
+                        onChange={(e) => setDraftName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void saveName(row);
+                          }
+                          if (e.key === "Escape") cancelEditing();
+                        }}
+                        aria-label={`ویرایش نام ${row.name}`}
+                        className="w-full min-w-0 rounded-lg border border-blue-300 bg-white px-2 py-1 text-xs font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-blue-700 dark:bg-slate-800 dark:text-slate-100"
+                      />
+                    ) : (
+                      <>
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <p className="truncate text-xs font-bold text-slate-700 dark:text-slate-200">
+                            {row.name}
+                          </p>
+                          {!row.visible && (
+                            <span className="shrink-0 rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                              پنهان
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+                          {toFa(row.eventCount)} رویداد
+                        </p>
+                      </>
+                    )}
                   </div>
-                  {!row.visible && (
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                      پنهان
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => toggleVisibility(row)}
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    {isEditing ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void saveName(row)}
+                          disabled={busy !== null}
+                          aria-label={`ذخیره نام ${row.name}`}
+                          title="ذخیره"
+                          className="rounded-lg p-1.5 text-emerald-600 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                        >
+                          {busy === row.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Check className="h-4 w-4" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEditing}
+                          disabled={busy !== null}
+                          aria-label="انصراف از ویرایش"
+                          title="انصراف"
+                          className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => startEditing(row)}
+                          disabled={busy !== null}
+                          aria-label={`تغییر نام ${row.name}`}
+                          title="تغییر نام"
+                          className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-400"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleVisibility(row)}
                     disabled={busy !== null}
                     aria-label={row.visible ? `پنهان‌سازی ${row.name}` : `نمایش ${row.name}`}
                     title={row.visible ? "پنهان‌سازی" : "نمایش"}
@@ -244,21 +359,24 @@ export default function ConsoleCategories({
                   >
                     {row.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => removeCategory(row)}
-                    disabled={busy !== null}
-                    aria-label={`حذف ${row.name}`}
-                    title="حذف"
-                    className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-red-950"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => removeCategory(row)}
+                      disabled={busy !== null}
+                      aria-label={`حذف ${row.name}`}
+                      title="حذف"
+                      className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-red-950"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </li>
               );
             })}
             {rows.length === 0 && (
-              <li className="px-3 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
+              <li className="col-span-full px-3 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
                 هیچ دسته‌ای ثبت نشده است؛ از فرم کنار، اولین دسته را بسازید.
               </li>
             )}

@@ -2,7 +2,9 @@
 
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { motion } from "framer-motion";
-import { CalendarX2, ChevronDown, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
+import { CalendarX2, ChevronDown, Crown, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
+import { useLocation } from "@/components/layout/LocationProvider";
+import type { PublicCategory } from "@/lib/categories";
 import { eventStatusMeta } from "@/lib/data";
 import type { EventCard, EventTimeState } from "@/lib/event-types";
 import { toFa } from "@/lib/utils";
@@ -30,6 +32,12 @@ function useUrlSearch(): string {
 }
 
 const ALL = "همه";
+/** Online events are location-independent, so they stay in every city view. */
+const ONLINE_CITY = "آنلاین";
+
+/** Paid placements always lead, whatever sort the visitor picks. */
+const byPromotion = (a: EventCard, b: EventCard) =>
+  Number(b.promoted) - Number(a.promoted);
 
 /** How many cards each "load more" click reveals. */
 const PAGE_SIZE = 6;
@@ -54,7 +62,13 @@ const sortOptions = [
 const selectClass =
   "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-blue-600";
 
-export default function EventsBrowser({ events }: { events: EventCard[] }) {
+export default function EventsBrowser({
+  events,
+  categories,
+}: {
+  events: EventCard[];
+  categories: PublicCategory[];
+}) {
   /**
    * The filters the hero search hands over in the URL. They are the defaults
    * — every filter the visitor touches by hand overrides them (`null` means
@@ -63,9 +77,9 @@ export default function EventsBrowser({ events }: { events: EventCard[] }) {
   const urlSearch = useUrlSearch();
   const urlParams = useMemo(() => new URLSearchParams(urlSearch), [urlSearch]);
 
+  const { location } = useLocation();
   const [queryOverride, setQueryOverride] = useState<string | null>(null);
   const [categoryOverride, setCategoryOverride] = useState<string | null>(null);
-  const [cityOverride, setCityOverride] = useState<string | null>(null);
   const [status, setStatus] = useState<EventTimeState | typeof ALL>(ALL);
   const [price, setPrice] = useState(ALL);
   const [sort, setSort] = useState("recommended");
@@ -75,9 +89,18 @@ export default function EventsBrowser({ events }: { events: EventCard[] }) {
 
   const query = queryOverride ?? urlParams.get("q") ?? "";
   const category = categoryOverride ?? urlParams.get("category") ?? ALL;
-  const city = cityOverride ?? urlParams.get("city") ?? ALL;
+  /* The header's location picker is the city filter here — not a second
+     dropdown in this section. Online events are added to every city view. */
+  const city = location.city;
 
-  const categoryOptions = [ALL, ...Array.from(new Set(events.map((e) => e.category)))];
+  /* The select mirrors the visible `Category` rows, not whatever happens to
+     be in the current event page. A bookmarked URL may still name a category
+     an admin has since hidden; keep that option so the select never goes blank. */
+  const categoryOptions = useMemo(() => {
+    const names = categories.map((item) => item.name);
+    if (category !== ALL && !names.includes(category)) names.push(category);
+    return [ALL, ...names];
+  }, [categories, category]);
   const cityOptions = [ALL, ...Array.from(new Set(events.map((e) => e.city).filter(Boolean)))];
 
   /** Current filters + sort — identifies one result set (and its page); the
@@ -93,13 +116,13 @@ export default function EventsBrowser({ events }: { events: EventCard[] }) {
   const visibleCount = pagination.key === filterKey ? pagination.count : PAGE_SIZE;
 
   const hasActiveFilters =
-    query.trim() !== "" || category !== ALL || status !== ALL || city !== ALL || price !== ALL;
+    query.trim() !== "" || category !== ALL || status !== ALL || price !== ALL;
 
   function resetFilters() {
-    /* Clearing means clearing — the URL default (the hero search) included. */
+    /* Clearing means clearing — the URL default (the hero search) included.
+       The header location is not cleared here; it is a site-wide choice. */
     setQueryOverride("");
     setCategoryOverride(ALL);
-    setCityOverride(ALL);
     setStatus(ALL);
     setPrice(ALL);
   }
@@ -111,18 +134,29 @@ export default function EventsBrowser({ events }: { events: EventCard[] }) {
         return false;
       if (category !== ALL && event.category !== category) return false;
       if (status !== ALL && event.status !== status) return false;
-      if (city !== ALL && event.city !== city) return false;
+      if (event.city !== ONLINE_CITY && event.city !== city) return false;
       if (price === "free" && event.price !== null) return false;
       if (price === "paid" && event.price === null) return false;
       return true;
     });
 
-    if (sort === "price") list.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
-    if (sort === "title") list.sort((a, b) => a.title.localeCompare(b.title, "fa"));
+    /* The server already pins promoted rows first; repeat it here so a
+       client-side sort cannot demote them. */
+    if (sort === "price") {
+      list.sort((a, b) => byPromotion(a, b) || (a.price ?? 0) - (b.price ?? 0));
+    } else if (sort === "title") {
+      list.sort((a, b) => byPromotion(a, b) || a.title.localeCompare(b.title, "fa"));
+    } else {
+      list.sort(byPromotion);
+    }
     return list;
   }, [events, query, category, status, city, price, sort]);
 
   const shown = visible.slice(0, visibleCount);
+  /* Promoted rows lead the sorted list; render them as their own block so the
+     gold cards are visibly separated from the ordinary cards below them. */
+  const shownPromoted = shown.filter((event) => event.promoted);
+  const shownRegular = shown.filter((event) => !event.promoted);
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-16 pt-24 sm:px-6 sm:pt-28 lg:px-8">
@@ -137,8 +171,8 @@ export default function EventsBrowser({ events }: { events: EventCard[] }) {
             کشف رویدادها
           </h1>
           <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-            {toFa(events.length)} رویداد در {toFa(cityOptions.length - 1)} شهر؛ فیلتر کنید و
-            رویداد بعدی‌تان را پیدا کنید.
+            {toFa(events.length)} رویداد در {toFa(cityOptions.length - 1)} شهر؛ نتایج بر اساس شهر
+            «{city}» و رویدادهای آنلاین نمایش داده می شوند.
           </p>
         </div>
       </div>
@@ -197,21 +231,21 @@ export default function EventsBrowser({ events }: { events: EventCard[] }) {
             </select>
           </div>
 
-          {/* City */}
-          <div className="lg:w-40">
+          {/* Category */}
+          <div className="lg:w-48">
             <label
-              htmlFor="event-city"
+              htmlFor="event-category"
               className="mb-1.5 block text-[11px] font-bold text-slate-500 dark:text-slate-400"
             >
-              شهر
+              دسته بندی
             </label>
             <select
-              id="event-city"
-              value={city}
-              onChange={(e) => setCityOverride(e.target.value)}
+              id="event-category"
+              value={category}
+              onChange={(e) => setCategoryOverride(e.target.value)}
               className={selectClass}
             >
-              {cityOptions.map((option) => (
+              {categoryOptions.map((option) => (
                 <option key={option} value={option}>
                   {option}
                 </option>
@@ -254,29 +288,6 @@ export default function EventsBrowser({ events }: { events: EventCard[] }) {
           )}
         </div>
 
-        {/* Category chips */}
-        <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
-          <p className="mb-2 text-[11px] font-bold text-slate-500 dark:text-slate-400">
-            دسته‌بندی
-          </p>
-          <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-            {categoryOptions.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setCategoryOverride(option)}
-                aria-pressed={category === option}
-                className={`shrink-0 rounded-full px-3.5 py-2 text-xs font-bold transition-all duration-200 ${
-                  category === option
-                    ? "bg-blue-600 text-white shadow-sm shadow-blue-600/30"
-                    : "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-700 dark:hover:text-blue-400"
-                }`}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-        </div>
       </section>
 
       {/* ── Section 2: results ───────────────────────────────── */}
@@ -321,16 +332,65 @@ export default function EventsBrowser({ events }: { events: EventCard[] }) {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, ease: "easeOut" }}
-              className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2"
+              className="mt-5 space-y-8"
             >
-              {shown.map((event) => (
-                <EventListCard
-                  key={event.id}
-                  event={event}
-                  saved={isSaved(event.id)}
-                  onToggleSave={toggle}
-                />
-              ))}
+              {shownPromoted.length > 0 && (
+                <section aria-labelledby="promoted-events-heading">
+                  <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-300/70 bg-gradient-to-l from-amber-100/80 via-amber-50/70 to-white px-3 py-2 dark:border-amber-800/70 dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-300 to-amber-500 text-amber-950 shadow-sm">
+                      <Crown className="h-4 w-4 fill-current" />
+                    </span>
+                    <h2
+                      id="promoted-events-heading"
+                      className="text-sm font-extrabold text-amber-900 dark:text-amber-200"
+                    >
+                      رویدادهای ویژه
+                    </h2>
+                    <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-[10px] font-bold text-amber-900 dark:bg-amber-500/20 dark:text-amber-200">
+                      {toFa(shownPromoted.length)} ویژه
+                    </span>
+                    <p className="w-full text-[11px] text-amber-800/80 dark:text-amber-300/70 sm:ms-auto sm:w-auto">
+                      این رویدادها توسط کوجا در صدر فهرست قرار گرفتهاند.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    {shownPromoted.map((event) => (
+                      <EventListCard
+                        key={event.id}
+                        event={event}
+                        saved={isSaved(event.id)}
+                        onToggleSave={toggle}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {shownRegular.length > 0 && (
+                <section aria-labelledby="other-events-heading">
+                  <div className="mb-3 flex items-center gap-2">
+                    <h2
+                      id="other-events-heading"
+                      className="text-sm font-extrabold text-slate-800 dark:text-slate-200"
+                    >
+                      سایر رویدادها
+                    </h2>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                      {toFa(shownRegular.length)} مورد
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    {shownRegular.map((event) => (
+                      <EventListCard
+                        key={event.id}
+                        event={event}
+                        saved={isSaved(event.id)}
+                        onToggleSave={toggle}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
             </motion.div>
 
             {/* Load more — revealed one page at a time */}

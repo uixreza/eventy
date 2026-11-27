@@ -51,6 +51,65 @@ export async function createCategory(input: {
   return { ok: true };
 }
 
+/**
+ * Renames a category. Events keep their own free-text `category`, so the rows
+ * that still carry the old title are moved with it — otherwise the curated
+ * list would show the new name while the public filter and event count still
+ * looked for the old one. Both writes go in one transaction.
+ */
+export async function renameCategory(
+  categoryId: string,
+  rawName: string,
+): Promise<CategoryResult> {
+  const gate = await requireAdminActor();
+  if (!gate.ok) return gate;
+
+  const name = cleanName(rawName);
+  if (!name || name.length > 60) {
+    return { ok: false, error: "نام دسته باید بین ۱ تا ۶۰ حرف باشد." };
+  }
+
+  try {
+    const existing = await prisma.category.findUnique({
+      where: { id: categoryId },
+      select: { name: true },
+    });
+    if (!existing) {
+      return { ok: false, error: "دسته پیدا نشد." };
+    }
+    if (existing.name === name) return { ok: true };
+
+    const duplicate = await prisma.category.findFirst({
+      where: { name, id: { not: categoryId } },
+      select: { id: true },
+    });
+    if (duplicate) {
+      return { ok: false, error: `دسته «${name}» قبلاً ثبت شده است.` };
+    }
+
+    await prisma.$transaction([
+      prisma.category.update({ where: { id: categoryId }, data: { name } }),
+      prisma.event.updateMany({
+        where: { category: existing.name },
+        data: { category: name },
+      }),
+    ]);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return { ok: false, error: `دسته «${name}» قبلاً ثبت شده است.` };
+    }
+    return { ok: false, error: "تغییر نام دسته ذخیره نشد؛ دوباره تلاش کنید." };
+  }
+
+  /* Both the curated grid and the event cards/filters read these names. */
+  updateTag("categories");
+  updateTag("events");
+  return { ok: true };
+}
+
 /** Hides a category from the public grids, or brings it back. */
 export async function setCategoryVisible(
   categoryId: string,

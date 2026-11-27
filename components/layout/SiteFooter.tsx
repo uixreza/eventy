@@ -32,6 +32,7 @@ async function currentJalaliYear(): Promise<number> {
 const exploreLinks = [
   { label: "همه رویدادها", href: "/events" },
   { label: "رویدادهای منتخب", href: "/#events" },
+  { label: "درباره ما", href: "/about" },
   { label: "دسته‌بندی‌ها", href: "/#categories" },
 ];
 
@@ -200,7 +201,7 @@ export default async function SiteFooter() {
         {/* ── Bottom bar ────────────────────────────────────────── */}
         <div className="border-t border-slate-100 dark:border-slate-800">
           <div className="flex flex-col items-center justify-between gap-3 py-5 text-xs text-slate-400 sm:flex-row dark:text-slate-500">
-            <p>© {toFa(year)} رویدادشو — تمامی حقوق محفوظ است.</p>
+            <p>© {toFa(year)} Kooja — تمامی حقوق محفوظ است.</p>
             <Link
               href="/rules"
               className="font-bold transition-colors duration-200 hover:text-blue-600 dark:hover:text-blue-400"

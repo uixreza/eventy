@@ -3,7 +3,7 @@ import SettingsLoader from "@/components/dashboard/SettingsLoader";
 
 export const metadata: Metadata = {
   title: "تنظیمات",
-  description: "تنظیمات حساب کاربری رویدادشو؛ نام، تاریخ تولد شمسی و کد ملی",
+  description: "تنظیمات حساب کاربری Kooja؛ نام، تاریخ تولد شمسی و کد ملی",
 };
 
 /**

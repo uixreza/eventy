@@ -3,10 +3,11 @@ import type { Metadata } from "next";
 import ConsoleEditLoader from "@/components/console/ConsoleEditLoader";
 import PageLoader from "@/components/ui/PageLoader";
 import { getCategoryIcons } from "@/lib/categories";
+import { getPublicPricing } from "@/lib/pricing";
 
 export const metadata: Metadata = {
   title: "ویرایش رویداد",
-  description: "اصلاح اطلاعات رویداد از کنسول مدیریت رویدادشو",
+  description: "اصلاح اطلاعات رویداد از کنسول مدیریت Kooja",
 };
 
 type ConsoleEditParams = { params: Promise<{ id: string }> };
@@ -31,6 +32,15 @@ export default function ConsoleEditPage({ params }: ConsoleEditParams) {
 
 async function ConsoleEditContent({ params }: ConsoleEditParams) {
   const { id } = await params;
-  const categoryIcons = await getCategoryIcons();
-  return <ConsoleEditLoader id={id} categoryIcons={categoryIcons} />;
+  const [categoryIcons, pricing] = await Promise.all([
+    getCategoryIcons(),
+    getPublicPricing(),
+  ]);
+  return (
+    <ConsoleEditLoader
+      id={id}
+      categoryIcons={categoryIcons}
+      promotionPrice={pricing.promotionPrice}
+    />
+  );
 }

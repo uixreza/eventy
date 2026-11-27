@@ -7,6 +7,14 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { getBookmarkedIds } from "@/lib/events";
 import { jalaliToDate, dateToJalali, realInstant } from "@/lib/jalali";
+import {
+  isEventImageInputType,
+  isEventImageKey,
+  MAX_EVENT_IMAGE_BYTES,
+  MAX_EVENT_IMAGES,
+} from "@/lib/event-images";
+import { deleteEventImages, uploadEventImage } from "@/lib/event-storage";
+import { isValidMapPoint } from "@/lib/map";
 
 /**
  * Every write to the event tables.
@@ -32,6 +40,9 @@ export type EventInput = {
   mode: "INPERSON" | "ONLINE";
   venue: string;
   city: string;
+  /** Exact map pin — required for in-person events, cleared for online ones. */
+  latitude: number | null;
+  longitude: number | null;
   onlineUrl: string;
   /** `null` when the organizer left the capacity undefined. */
   capacity: number | null;
@@ -42,6 +53,16 @@ export type EventInput = {
   /** `null` for a free event. */
   price: number | null;
   coverGradient: string;
+  /**
+   * Private-bucket object keys in display order — the first is the cover.
+   * An empty slot means a new file is attached under the matching
+   * `image-<index>` field of the action's FormData.
+   */
+  images: string[];
+  /** Answer to the publish-time question — stored but never publicly shown. */
+  needsPhotographyTeam?: boolean;
+  /** Paid top-placement intent; only visible publicly once PUBLISHED. */
+  promoted?: boolean;
 };
 
 export type EventActionResult =
@@ -123,6 +144,8 @@ type ValidatedEvent = {
   minute: number;
   venue: string;
   city: string;
+  latitude: number | null;
+  longitude: number | null;
   mode: "INPERSON" | "ONLINE";
   capacity: number | null;
   highlights: string[];
@@ -130,7 +153,10 @@ type ValidatedEvent = {
   price: number | null;
   coverGradient: string;
   onlineUrl: string | null;
+  images: string[];
   startsAt: Date;
+  needsPhotographyTeam: boolean;
+  promoted: boolean;
 };
 
 function validate(
@@ -199,6 +225,23 @@ function validate(
     }
   }
 
+  /* The pin belongs to in-person events only. Online rows get `null` even if
+     a stale payload arrives from the browser. */
+  const latitude =
+    mode === "INPERSON" && input.latitude !== null ? Number(input.latitude) : Number.NaN;
+  const longitude =
+    mode === "INPERSON" && input.longitude !== null ? Number(input.longitude) : Number.NaN;
+  if (
+    mode === "INPERSON" &&
+    !isValidMapPoint(
+      Number.isFinite(latitude) && Number.isFinite(longitude)
+        ? { lat: latitude, lng: longitude }
+        : null,
+    )
+  ) {
+    return { ok: false, error: "روی نقشه، محل برگزاری رویداد را انتخاب کنید." };
+  }
+
   /* `null` is the «نامشخص» option — no fixed limit, so no waitlist. */
   const capacity =
     input.capacity === null ? null : Number(input.capacity);
@@ -253,6 +296,28 @@ function validate(
     ? input.coverGradient
     : COVER_GRADIENTS[0];
 
+  /* Photos are either keys already in the private bucket or empty slots
+     waiting for the files sent alongside this payload. Empty slots are kept
+     in place so each file stays matched to its chosen position. */
+  const images = Array.isArray(input.images)
+    ? input.images.map((item) => String(item ?? "").trim())
+    : [];
+  if (images.length > MAX_EVENT_IMAGES) {
+    return { ok: false, error: `حداکثر ${MAX_EVENT_IMAGES} تصویر برای هر رویداد مجاز است.` };
+  }
+
+  const seenKeys = new Set<string>();
+  for (const key of images) {
+    if (key === "") continue;
+    if (!isEventImageKey(key)) {
+      return { ok: false, error: "نشانی یکی از تصاویر رویداد معتبر نیست." };
+    }
+    if (seenKeys.has(key)) {
+      return { ok: false, error: "یک تصویر نمی‌تواند دوبار در رویداد تکرار شود." };
+    }
+    seenKeys.add(key);
+  }
+
   return {
     ok: true,
     value: {
@@ -266,6 +331,8 @@ function validate(
       minute,
       venue,
       city,
+      latitude,
+      longitude,
       mode,
       capacity,
       highlights,
@@ -273,9 +340,91 @@ function validate(
       price,
       coverGradient,
       onlineUrl: mode === "ONLINE" ? onlineUrl : null,
+      images,
       startsAt,
+      needsPhotographyTeam: input.needsPhotographyTeam === true,
+      promoted: input.promoted === true,
     },
   };
+}
+
+type ParsedEventForm = {
+  ok: true;
+  value: EventInput;
+  files: (File | null)[];
+};
+
+/**
+ * The form sends one JSON `payload` plus the new files as `image-<index>`.
+ * Parsing happens before any bucket write so a malformed direct POST cannot
+ * leave orphaned objects behind.
+ */
+function parseEventForm(form: FormData): ParsedEventForm | { ok: false; error: string } {
+  const raw = form.get("payload");
+  if (typeof raw !== "string") {
+    return { ok: false, error: "داده‌های ارسالی رویداد معتبر نیست." };
+  }
+
+  let input: EventInput;
+  try {
+    input = JSON.parse(raw) as EventInput;
+  } catch {
+    return { ok: false, error: "داده‌های ارسالی رویداد معتبر نیست." };
+  }
+  if (!input || typeof input !== "object") {
+    return { ok: false, error: "داده‌های ارسالی رویداد معتبر نیست." };
+  }
+
+  const images = Array.isArray(input.images)
+    ? input.images.map((item) => String(item ?? "").trim())
+    : [];
+  const files = images.map((key, index) => {
+    if (key !== "") return null;
+    const file = form.get(`image-${index}`);
+    return file instanceof File ? file : null;
+  });
+
+  /* Check the attached files here as well as in the browser — a direct POST
+     is not bound by the form's accept attribute or size hints. */
+  for (const file of files) {
+    if (!file) continue;
+    if (!isEventImageInputType(file.type)) {
+      return { ok: false, error: "قالب یکی از تصاویر رویداد پشتیبانی نمی‌شود." };
+    }
+    if (file.size === 0 || file.size > MAX_EVENT_IMAGE_BYTES) {
+      return { ok: false, error: "حجم هر تصویر رویداد باید حداکثر ۱۰ مگابایت باشد." };
+    }
+  }
+
+  return { ok: true, value: { ...input, images }, files };
+}
+
+/**
+ * Uploads only the new slots, in their chosen order. Keys already in the
+ * bucket are passed through untouched. `uploadedKeys` collects this call's
+ * writes so a later database failure can roll them back.
+ */
+async function uploadNewImages(
+  slots: string[],
+  files: (File | null)[],
+  uploadedKeys: string[],
+): Promise<string[]> {
+  const resolved = [...slots];
+  for (let index = 0; index < resolved.length; index += 1) {
+    if (resolved[index] !== "") continue;
+    const file = files[index];
+    if (!file) throw new Error("Missing event image.");
+    const key = await uploadEventImage(file);
+    uploadedKeys.push(key);
+    resolved[index] = key;
+  }
+  return resolved;
+}
+
+/** Uploads are rolled back best-effort; a failed cleanup must not hide the save error. */
+async function rollbackUploads(keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  await deleteEventImages(keys).catch(() => {});
 }
 
 /** The signed-in user, or `null`. */
@@ -288,17 +437,22 @@ async function currentUser() {
  * Creates an event. It starts as `PENDING` — an admin approves it in
  * `/console/events` before it becomes visible on the public pages.
  */
-export async function createEvent(input: EventInput): Promise<EventActionResult> {
+export async function createEvent(form: FormData): Promise<EventActionResult> {
   const user = await currentUser();
   if (!user) {
     return { ok: false, error: "نشست شما به پایان رسیده است؛ دوباره وارد شوید." };
   }
 
-  const checked = validate(input, { isNew: true });
+  const parsed = parseEventForm(form);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+
+  const checked = validate(parsed.value, { isNew: true });
   if (!checked.ok) return { ok: false, error: checked.error };
   const value = checked.value;
 
+  const uploadedKeys: string[] = [];
   try {
+    const images = await uploadNewImages(value.images, parsed.files, uploadedKeys);
     const event = await prisma.event.create({
       data: {
         slug: await uniqueSlug(value.title),
@@ -308,6 +462,8 @@ export async function createEvent(input: EventInput): Promise<EventActionResult>
         category: value.category,
         city: value.city,
         venue: value.venue,
+        latitude: value.latitude,
+        longitude: value.longitude,
         mode: value.mode,
         onlineUrl: value.onlineUrl,
         startsAt: value.startsAt,
@@ -316,6 +472,9 @@ export async function createEvent(input: EventInput): Promise<EventActionResult>
         agenda: value.agenda,
         price: value.price,
         coverGradient: value.coverGradient,
+        images,
+        needsPhotographyTeam: value.needsPhotographyTeam,
+        promoted: value.promoted,
         status: "PENDING",
         organizerId: user.id,
         organizerName: user.name,
@@ -332,6 +491,7 @@ export async function createEvent(input: EventInput): Promise<EventActionResult>
       message: "رویداد شما ثبت شد و پس از تأیید کارشناسان منتشر می‌شود.",
     };
   } catch {
+    await rollbackUploads(uploadedKeys);
     return { ok: false, error: "ثبت رویداد ممکن نشد؛ اتصال اینترنت را بررسی کنید." };
   }
 }
@@ -342,7 +502,7 @@ export async function createEvent(input: EventInput): Promise<EventActionResult>
  */
 export async function updateEvent(
   eventId: string,
-  input: EventInput,
+  form: FormData,
 ): Promise<EventActionResult> {
   const session = await getSession();
   const userId = session?.user?.id;
@@ -355,26 +515,32 @@ export async function updateEvent(
 
   const event = await prisma.event.findFirst({
     where: isAdmin ? { id: eventId } : { id: eventId, organizerId: userId },
-    select: { id: true, startsAt: true, status: true, organizerId: true },
+    select: { id: true, startsAt: true, status: true, organizerId: true, images: true },
   });
   if (!event) {
     return { ok: false, error: "این رویداد پیدا نشد یا متعلق به شما نیست." };
   }
 
+  const parsed = parseEventForm(form);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+
   /* An unchanged date may sit in the past — only a new one has to be ahead. */
   const stored = dateToJalali(event.startsAt);
   const sameMoment =
-    input.jy === stored.jy &&
-    input.jm === stored.jm &&
-    input.jd === stored.jd &&
-    input.hour === stored.hh &&
-    input.minute === stored.mm;
+    parsed.value.jy === stored.jy &&
+    parsed.value.jm === stored.jm &&
+    parsed.value.jd === stored.jd &&
+    parsed.value.hour === stored.hh &&
+    parsed.value.minute === stored.mm;
 
-  const checked = validate(input, { isNew: !sameMoment });
+  const checked = validate(parsed.value, { isNew: !sameMoment });
   if (!checked.ok) return { ok: false, error: checked.error };
   const value = checked.value;
 
+  const uploadedKeys: string[] = [];
+  let savedImages: string[] = [];
   try {
+    savedImages = await uploadNewImages(value.images, parsed.files, uploadedKeys);
     await prisma.event.update({
       where: { id: event.id },
       data: {
@@ -384,6 +550,8 @@ export async function updateEvent(
         category: value.category,
         city: value.city,
         venue: value.venue,
+        latitude: value.latitude,
+        longitude: value.longitude,
         mode: value.mode,
         onlineUrl: value.onlineUrl,
         startsAt: value.startsAt,
@@ -392,6 +560,9 @@ export async function updateEvent(
         agenda: value.agenda,
         price: value.price,
         coverGradient: value.coverGradient,
+        images: savedImages,
+        needsPhotographyTeam: value.needsPhotographyTeam,
+        promoted: value.promoted,
         /* A participant's edit re-opens the review — a published or sent-back
            event goes back to the queue. An admin's edit is final: the status
            only changes through approve/reject. */
@@ -410,11 +581,19 @@ export async function updateEvent(
     if (event.organizerId && event.organizerId !== userId) {
       updateTag(`user-events:${event.organizerId}`);
     }
-
-    return { ok: true, message: "تغییرات رویداد ذخیره شد." };
   } catch {
+    await rollbackUploads(uploadedKeys);
     return { ok: false, error: "ذخیره تغییرات ممکن نشد؛ اتصال اینترنت را بررسی کنید." };
   }
+
+  /* Only after the row is safely saved do we drop objects the editor removed.
+     A cleanup failure leaves an orphan rather than breaking a valid event. */
+  const removed = event.images.filter((key) => !savedImages.includes(key));
+  if (removed.length > 0) {
+    await deleteEventImages(removed).catch(() => {});
+  }
+
+  return { ok: true, message: "تغییرات رویداد ذخیره شد." };
 }
 
 /** Deletes one of the caller's own events — its tickets go with it. */
@@ -426,13 +605,16 @@ export async function deleteEvent(eventId: string): Promise<EventActionResult> {
 
   const event = await prisma.event.findFirst({
     where: { id: eventId, organizerId: user.id },
-    select: { id: true },
+    select: { id: true, images: true },
   });
   if (!event) {
     return { ok: false, error: "این رویداد پیدا نشد یا متعلق به شما نیست." };
   }
 
   try {
+    /* Remove the bucket objects first: if that fails the event stays so the
+       owner can retry instead of leaving unreachable photos behind. */
+    await deleteEventImages(event.images);
     await prisma.event.delete({ where: { id: event.id } });
   } catch {
     return { ok: false, error: "حذف رویداد ممکن نشد؛ اتصال اینترنت را بررسی کنید." };

@@ -236,7 +236,7 @@ export function AuthModal({
         isNew ? "حساب شما ساخته شد" : "ورود موفقیت‌آمیز بود",
         isNew
           ? "خوش آمدی! حالا می‌توانی وارد داشبوردت شوی."
-          : "به رویدادشو خوش آمدی!",
+          : "به Kooja خوش آمدی!",
       );
     } catch {
       sileo.error({
@@ -400,7 +400,7 @@ export function AuthModal({
                 رویداد بساز، ظرفیتش رو پر کن!
               </h3>
               <p className="mt-2 text-sm leading-7 text-neutral-600 dark:text-slate-400">
-                با ورود به رویدادشو، رویدادهات رو به هزاران نفر برسون، ثبت‌نام‌ها رو مدیریت کن و
+                با ورود به Kooja، رویدادهات رو به هزاران نفر برسون، ثبت‌نام‌ها رو مدیریت کن و
                 بلیت‌ها رو زنده بفروش.
               </p>
 
@@ -491,7 +491,7 @@ export function AuthModal({
                       <span className="cursor-pointer font-bold text-blue-600 underline underline-offset-2 transition-colors duration-200 hover:text-blue-700">
                         سیاست حریم خصوصی
                       </span>{" "}
-                      رویدادشو است.
+                      Kooja است.
                     </span>
                   </p>
 

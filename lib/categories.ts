@@ -48,7 +48,8 @@ export type PublicCategory = {
  * An event row keeps its category as a free-text string, so a card that
  * wants the category's glyph resolves it through this map. Unlike
  * `getPublicCategories`, hidden rows are included: hiding a category takes
- * it off the public grids, not off the events that already carry its name.
+ * it off the hero picker and the `/events` chips, not off the events that
+ * already carry its name.
  */
 export async function getCategoryIcons(): Promise<Record<string, string>> {
   "use cache";
@@ -61,9 +62,10 @@ export async function getCategoryIcons(): Promise<Record<string, string>> {
 
 /**
  * The categories the public pages show — visible rows only, in the order the
- * console lists them. Hidden categories never reach the landing grid or the
- * header dropdown, and an admin's change is picked up on the next render
- * because every category action calls `updateTag("categories")`.
+ * console lists them. Hidden categories never reach the landing grid, the
+ * header dropdown, the hero search or the `/events` chips, and an admin's
+ * change is picked up on the next render because every category action calls
+ * `updateTag("categories")`.
  *
  * Cached with the same contract as `getPublishedEvents` (`lib/events.ts`):
  * `cacheLife("minutes")` bounds staleness, `cacheTag` lets the console

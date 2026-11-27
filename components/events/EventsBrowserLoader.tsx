@@ -2,6 +2,7 @@
 
 import DataFetchError from "@/components/dashboard/DataFetchError";
 import { useServerData } from "@/components/dashboard/useServerData";
+import type { PublicCategory } from "@/lib/categories";
 import EventsBrowser from "./EventsBrowser";
 import { fetchPublishedEvents } from "./events-api";
 import { EventsListSkeleton } from "./EventsSkeletons";
@@ -9,9 +10,14 @@ import { EventsListSkeleton } from "./EventsSkeletons";
 /**
  * Loads every published event on each visit to `/events` and hands the
  * list to the browser. The page ships only its shell; the rows come from
- * `GET /api/events`, so every load sees the current database state.
+ * `GET /api/events`, so every load sees the current database state. The
+ * category chips come from the server-rendered `Category` rows instead.
  */
-export default function EventsBrowserLoader() {
+export default function EventsBrowserLoader({
+  categories,
+}: {
+  categories: PublicCategory[];
+}) {
   const { data, loaded, failed, reload } = useServerData(fetchPublishedEvents);
 
   if (failed) {
@@ -23,5 +29,5 @@ export default function EventsBrowserLoader() {
   }
   if (!loaded || !data) return <EventsListSkeleton />;
 
-  return <EventsBrowser events={data.events} />;
+  return <EventsBrowser events={data.events} categories={categories} />;
 }

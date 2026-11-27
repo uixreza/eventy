@@ -17,9 +17,11 @@ import { useServerData } from "@/components/dashboard/useServerData";
 export default function EditEventLoader({
   id,
   categoryIcons,
+  promotionPrice,
 }: {
   id: string;
   categoryIcons: Record<string, string>;
+  promotionPrice: number;
 }) {
   const { data, loaded, failed, reload } = useServerData(() => fetchEventForEdit(id));
 
@@ -51,6 +53,7 @@ export default function EditEventLoader({
       initial={data.initial}
       organizerName={data.organizerName}
       categoryIcons={categoryIcons}
+      promotionPrice={promotionPrice}
     />
   );
 }

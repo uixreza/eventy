@@ -3,7 +3,7 @@ import ConsoleUsersLoader from "@/components/console/ConsoleUsersLoader";
 
 export const metadata: Metadata = {
   title: "کاربران",
-  description: "مدیریت اعضا، نقش‌ها و وضعیت حساب‌های کاربری رویدادشو",
+  description: "مدیریت اعضا، نقش‌ها و وضعیت حساب‌های کاربری Kooja",
 };
 
 /** Static shell — the member list is fetched client-side from

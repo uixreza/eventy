@@ -3,7 +3,7 @@ import SavedView from "@/components/dashboard/SavedView";
 
 export const metadata: Metadata = {
   title: "علاقه‌مندی‌ها",
-  description: "رویدادهای ذخیره‌شده برای بعد در رویدادشو",
+  description: "رویدادهای ذخیره‌شده برای بعد در Kooja",
 };
 
 /**

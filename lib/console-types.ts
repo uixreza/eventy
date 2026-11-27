@@ -55,3 +55,19 @@ export type ConsoleOverview = {
   /** The ten most recent global notifications, newest first. */
   broadcasts: BroadcastNotice[];
 };
+
+/**
+ * Raw numbers behind the console menu's count badges.
+ *
+ * Counted directly from the tables on the server — the list endpoints cap
+ * their rows, so they cannot give an honest badge number. The client only
+ * formats these for display and never derives them from a partial list.
+ */
+export type ConsoleNavCounts = {
+  /** Events still waiting for moderation. */
+  pendingEvents: number;
+  /** Every report: rows have no read/resolved state yet. */
+  eventReports: number;
+  /** Ticket conversations waiting for an admin reply. */
+  openTickets: number;
+};

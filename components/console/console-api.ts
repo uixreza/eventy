@@ -1,9 +1,13 @@
 "use client";
 
+import type { SiteAnnouncementData } from "@/lib/announcement-types";
 import type { ConsoleCategory } from "@/lib/category-types";
-import type { ConsoleOverview } from "@/lib/console-types";
+import type { ConsoleNavCounts, ConsoleOverview } from "@/lib/console-types";
+import type { AdminEventReport } from "@/lib/event-report-types";
 import type { ConsoleEventDetail, ConsoleEventRow } from "@/lib/event-types";
+import type { SitePricingData } from "@/lib/pricing-types";
 import type { ConsoleReports } from "@/lib/report-types";
+import type { TicketsResponse } from "@/lib/ticket-types";
 import type { ConsoleUserDetail, ConsoleUserRow } from "@/lib/user-types";
 
 /**
@@ -51,12 +55,37 @@ export function fetchConsoleCategories() {
   return getJson<{ categories: ConsoleCategory[] }>("/api/console/categories");
 }
 
+/** `GET /api/console/ads` — the landing strip and banner's live state. */
+export function fetchConsoleAds() {
+  return getJson<{ announcement: SiteAnnouncementData }>("/api/console/ads");
+}
+
+/** `GET /api/console/settings` — the live prices edited by the admin. */
+export function fetchConsoleSettings() {
+  return getJson<{ pricing: SitePricingData }>("/api/console/settings");
+}
+
 /** `GET /api/console/overview` — the home page's live numbers. */
 export function fetchConsoleOverview() {
   return getJson<{ overview: ConsoleOverview }>("/api/console/overview");
 }
 
+/** `GET /api/console/nav-counts` — the three live menu badge numbers. */
+export function fetchConsoleNavCounts() {
+  return getJson<{ counts: ConsoleNavCounts }>("/api/console/nav-counts");
+}
+
 /** `GET /api/console/reports` — the analytics page's live numbers. */
 export function fetchConsoleReports() {
   return getJson<{ reports: ConsoleReports }>("/api/console/reports");
+}
+
+/** `GET /api/console/event-reports` — visitor complaints about events. */
+export function fetchEventReports() {
+  return getJson<{ reports: AdminEventReport[] }>("/api/console/event-reports");
+}
+
+/** `GET /api/console/tickets` — every support conversation in the inbox. */
+export function fetchAdminTickets() {
+  return getJson<TicketsResponse>("/api/console/tickets");
 }

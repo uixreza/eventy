@@ -3,7 +3,7 @@ import ConsoleOverviewLoader from "@/components/console/ConsoleOverviewLoader";
 
 export const metadata: Metadata = {
   title: "کنسول مدیریت",
-  description: "کنسول مدیریت و کنترل پروژه رویدادشو",
+  description: "کنسول مدیریت و کنترل پروژه Kooja",
 };
 
 /**

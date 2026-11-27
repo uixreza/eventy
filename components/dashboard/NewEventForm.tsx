@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -8,6 +9,9 @@ import {
   ArrowRight,
   Check,
   Clock,
+  Crown,
+  ImagePlus,
+  Images,
   Lightbulb,
   MapPin,
   Monitor,
@@ -17,15 +21,28 @@ import {
   Ticket,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 import { sileo } from "sileo";
 import { jalaaliMonthLength, toJalaali } from "jalaali-js";
 import { createEvent, updateEvent, type EventInput } from "@/app/actions/events";
 import { categoryIcon, FALLBACK_ICON } from "@/lib/category-icons";
 import { eventTabs } from "@/lib/data";
+import { eventMapCenter, type MapPoint } from "@/lib/map";
+import {
+  EVENT_IMAGE_INPUT_TYPES,
+  eventImageUrl,
+  isEventImageInputType,
+  isLocalEventPreview,
+  MAX_EVENT_IMAGE_BYTES,
+  MAX_EVENT_IMAGES,
+} from "@/lib/event-images";
+import { DEFAULT_SITE_PRICING } from "@/lib/pricing-types";
 import { faNumber, faPrice, normalizeDigits, shamsiMonths, toFa } from "@/lib/utils";
 import { useLocation } from "@/components/layout/LocationProvider";
+import EventMap from "@/components/maps/EventMap";
 import { Wheel, WHEEL_HEIGHT } from "@/components/ui/Wheel";
+import PhotoTeamPrompt from "./PhotoTeamPrompt";
 
 /** «همه» is a filter, not a real category. */
 const categories = eventTabs.slice(1);
@@ -57,6 +74,11 @@ const STEPS = [
   { title: "پیش‌نمایش و انتشار", short: "انتشار", icon: Check },
 ];
 
+/** Photos per event and the size the publish action accepts for each. */
+const MAX_IMAGES = MAX_EVENT_IMAGES;
+const MAX_IMAGE_BYTES = MAX_EVENT_IMAGE_BYTES;
+const IMAGE_TYPES = EVENT_IMAGE_INPUT_TYPES;
+
 /* Horizontal padding is spelled out per input (ps/pe) so suffixed fields can
    widen only the end side without relying on conflicting utility order. */
 const fieldBase =
@@ -76,6 +98,9 @@ export type EventFormValues = {
   description: string;
   city: string;
   venue: string;
+  /** Exact map pin for in-person events; absent on older rows and online ones. */
+  latitude?: number | null;
+  longitude?: number | null;
   onlineUrl: string;
   /** `null` when the organizer left the capacity undefined. */
   capacity: number | null;
@@ -85,6 +110,12 @@ export type EventFormValues = {
   agenda: { time: string; title: string }[];
   price: number | null;
   gradient: string;
+  /** Photo URLs, in display order — the first one is the cover. */
+  images: string[];
+  /** Answer to the publish-time photography question, kept for managers. */
+  needsPhotographyTeam?: boolean;
+  /** Whether the event is set to lead the public listings. */
+  promoted?: boolean;
   mode: "INPERSON" | "ONLINE";
   jy: number;
   jm: number;
@@ -104,6 +135,8 @@ type NewEventFormProps = {
    * database so the preview matches the public cards.
    */
   categoryIcons?: Record<string, string>;
+  /** Admin-controlled price shown next to the promotion toggle. */
+  promotionPrice?: number;
   /**
    * Where «بازگشت» points and where a save sends the browser. The console
    * hands in its own (`/console/events`) so an admin ends up back in the
@@ -116,16 +149,20 @@ export default function NewEventForm({
   initial,
   organizerName,
   categoryIcons = {},
+  promotionPrice = DEFAULT_SITE_PRICING.promotionPrice,
   returnTo,
 }: NewEventFormProps) {
   const router = useRouter();
+  /** The city chosen once in the header; new in-person events inherit it. */
+  const { location: centralLocation } = useLocation();
   const [pending, startTransition] = useTransition();
   const [step, setStep] = useState(0);
   const back = returnTo ?? { href: "/dashboard/events", label: "بازگشت به رویدادهای من" };
 
-  /** Current Jalali year, computed at render time so server and client agree. */
+  /** Current Jalali date, computed at render time so server and client agree. */
   const now = new Date();
-  const currentYear = toJalaali(now.getFullYear(), now.getMonth() + 1, now.getDate()).jy;
+  const today = toJalaali(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  const currentYear = today.jy;
   /** The year never changes on the wheel — a new event happens this year. */
   const year = initial?.jy ?? currentYear;
 
@@ -133,7 +170,7 @@ export default function NewEventForm({
   const [category, setCategory] = useState(initial?.category ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [date, setDate] = useState({
-    month: initial?.jm ?? 8,
+    month: initial?.jm ?? today.jm,
     day: initial?.jd ?? 15,
   });
   const [hour, setHour] = useState(initial?.hour ?? 16);
@@ -142,6 +179,16 @@ export default function NewEventForm({
     initial?.mode === "ONLINE" ? "online" : "inperson",
   );
   const [venue, setVenue] = useState(initial?.venue ?? "");
+  /* A new event opens at the city centre; an existing one keeps its saved pin.
+     Online events never carry coordinates. */
+  const [mapPoint, setMapPoint] = useState<MapPoint | null>(() =>
+    initial?.mode === "ONLINE"
+      ? null
+      : eventMapCenter(initial?.city ?? centralLocation.city, {
+          lat: initial?.latitude ?? Number.NaN,
+          lng: initial?.longitude ?? Number.NaN,
+        }),
+  );
   const [link, setLink] = useState(initial?.onlineUrl ?? "");
   const [capacity, setCapacity] = useState(initial?.capacity ? String(initial.capacity) : "");
   /* «نامشخص» — the organizer does not want a fixed cap, so the input is
@@ -155,15 +202,29 @@ export default function NewEventForm({
     initial?.price === null || initial?.price === undefined ? "free" : "paid",
   );
   const [price, setPrice] = useState(initial?.price ? String(initial.price) : "");
+  /* Paid top placement — kept through moderation, so approval pins the event. */
+  const [promoted, setPromoted] = useState(initial?.promoted ?? false);
   /* A new event starts with a random cover; an edit keeps the saved one. */
   const [gradient, setGradient] = useState(
     () =>
       initial?.gradient ??
       coverGradients[Math.floor(Math.random() * coverGradients.length)].className,
   );
+  /* Existing entries are private-bucket keys; new ones are local blob URLs
+     paired with the File that will be uploaded only on publish/save. */
+  const [images, setImages] = useState<string[]>(initial?.images ?? []);
+  const [imageFiles, setImageFiles] = useState<(File | null)[]>(() =>
+    (initial?.images ?? []).map(() => null),
+  );
+  const previewUrls = useRef<string[]>([]);
 
-  /** The city chosen once in the header; new in-person events inherit it. */
-  const { location: centralLocation } = useLocation();
+  /* Release browser preview memory when the wizard closes. */
+  useEffect(
+    () => () => {
+      previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
+    },
+    [],
+  );
 
   /* Wheel option lists — days follow the selected month's length in the
      fixed year (Esfand 29/30 included). */
@@ -171,7 +232,13 @@ export default function NewEventForm({
     value: i + 1,
     text: toFa(i + 1),
   }));
-  const monthItems = shamsiMonths.map((month) => ({ value: month.value, text: month.label }));
+  /* Only this month and the rest of the year can hold a new event; earlier
+     months stay visible on the wheel but are locked. */
+  const monthItems = shamsiMonths.map((month) => ({
+    value: month.value,
+    text: month.label,
+    disabled: month.value < today.jm,
+  }));
   const hourItems = hours.map((value) => ({ value, text: toFa(pad2(value)) }));
   const minuteItems = minutes.map((value) => ({ value, text: toFa(pad2(value)) }));
 
@@ -187,6 +254,9 @@ export default function NewEventForm({
     .filter((row) => row.time && row.title);
   const isEditing = Boolean(initial?.id);
   const isLastStep = step === STEPS.length - 1;
+  /** A new event asks about the photo team once, right before publishing. */
+  const [showPhotoPrompt, setShowPhotoPrompt] = useState(false);
+  const publishing = useRef(false);
 
   /** The selected category's glyph, shown on the preview cover. */
   const CategoryIcon = category
@@ -258,6 +328,13 @@ export default function NewEventForm({
         });
         return false;
       }
+      if (mode === "inperson" && !mapPoint) {
+        sileo.error({
+          title: "محل برگزاری را روی نقشه انتخاب کنید",
+          description: "برای رویداد حضوری یک نقطه روی نقشه لازم است.",
+        });
+        return false;
+      }
       if (mode === "online" && !link.trim()) {
         sileo.error({
           title: "لینک پخش آنلاین را وارد کنید",
@@ -325,6 +402,70 @@ export default function NewEventForm({
     setAgenda((current) => current.filter((_, position) => position !== index));
   }
 
+  /* ── «تصاویر رویداد» ────────────────────────────────────────── */
+  function handleImageFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const files = Array.from(input.files ?? []);
+    /* Clear the field so choosing the same file again still fires `change`. */
+    input.value = "";
+    if (files.length === 0) return;
+
+    const room = MAX_IMAGES - images.length;
+    if (room <= 0) {
+      sileo.error({
+        title: "ظرفیت تصاویر پر شده است",
+        description: `برای هر رویداد حداکثر ${toFa(MAX_IMAGES)} تصویر می‌توانید اضافه کنید.`,
+      });
+      return;
+    }
+    if (files.length > room) {
+      sileo.error({
+        title: "بخشی از تصاویر اضافه نشد",
+        description: `فقط ${toFa(room)} تصویر دیگر جا دارد.`,
+      });
+    }
+
+    /* No network here — a blob URL gives an instant local preview, and the
+       File itself waits in state until the publish/save action runs. */
+    const addedPreviews: string[] = [];
+    const addedFiles: (File | null)[] = [];
+    for (const file of files.slice(0, room)) {
+      if (!isEventImageInputType(file.type)) {
+        sileo.error({
+          title: "قالب تصویر پشتیبانی نمی‌شود",
+          description: "JPG، PNG، WebP، AVIF یا HEIC را انتخاب کنید.",
+        });
+        continue;
+      }
+      if (file.size === 0 || file.size > MAX_IMAGE_BYTES) {
+        sileo.error({
+          title: "حجم تصویر زیاد است",
+          description: "هر تصویر باید حداکثر ۱۰ مگابایت باشد.",
+        });
+        continue;
+      }
+
+      const preview = URL.createObjectURL(file);
+      previewUrls.current.push(preview);
+      addedPreviews.push(preview);
+      addedFiles.push(file);
+    }
+    if (addedPreviews.length === 0) return;
+
+    setImages((current) => [...current, ...addedPreviews].slice(0, MAX_IMAGES));
+    setImageFiles((current) => [...current, ...addedFiles].slice(0, MAX_IMAGES));
+  }
+
+  function removeImage(index: number) {
+    const removed = images[index];
+    if (isLocalEventPreview(removed)) {
+      URL.revokeObjectURL(removed);
+      previewUrls.current = previewUrls.current.filter((url) => url !== removed);
+    }
+    setImages((current) => current.filter((_, position) => position !== index));
+    setImageFiles((current) => current.filter((_, position) => position !== index));
+  }
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
@@ -335,6 +476,21 @@ export default function NewEventForm({
         return;
       }
     }
+
+    /* Only a brand-new event asks; edits keep the answer they were created
+       with, so an admin or organizer cannot silently change it. */
+    if (!isEditing) {
+      setShowPhotoPrompt(true);
+      return;
+    }
+    publish(initial?.needsPhotographyTeam ?? false);
+  }
+
+  /** Writes the event with the chosen answer — the final step of publishing. */
+  function publish(needsPhotographyTeam: boolean) {
+    if (publishing.current) return;
+    publishing.current = true;
+    setShowPhotoPrompt(false);
 
     const payload: EventInput = {
       title: title.trim(),
@@ -347,6 +503,8 @@ export default function NewEventForm({
       minute,
       mode: mode === "online" ? "ONLINE" : "INPERSON",
       venue: venue.trim(),
+      latitude: mode === "online" ? null : (mapPoint?.lat ?? null),
+      longitude: mode === "online" ? null : (mapPoint?.lng ?? null),
       /* An online event has no place on the map; an in-person one uses the
          city chosen in the header (or the existing city when editing). */
       city: mode === "online"
@@ -360,14 +518,27 @@ export default function NewEventForm({
         .filter((row) => row.time && row.title),
       price: priceType === "free" ? null : priceNumber,
       coverGradient: gradient,
+      /* A blank slot tells the action to read the matching `image-<index>`
+         File part; an existing entry is already a private-bucket key. */
+      images: images.map((src) => (isLocalEventPreview(src) ? "" : src)),
+      needsPhotographyTeam,
+      promoted,
     };
+
+    const body = new FormData();
+    body.append("payload", JSON.stringify(payload));
+    images.forEach((src, index) => {
+      const file = isLocalEventPreview(src) ? imageFiles[index] : null;
+      if (file) body.append(`image-${index}`, file);
+    });
 
     startTransition(async () => {
       const result = initial?.id
-        ? await updateEvent(initial.id, payload)
-        : await createEvent(payload);
+        ? await updateEvent(initial.id, body)
+        : await createEvent(body);
 
       if (!result.ok) {
+        publishing.current = false;
         sileo.error({ title: result.error, description: "لطفاً موارد را بررسی کنید." });
         return;
       }
@@ -376,7 +547,7 @@ export default function NewEventForm({
         title: isEditing ? "تغییرات ذخیره شد" : "رویداد شما ثبت شد",
         description:
           result.message ??
-          "پس از بررسی کارشناسان رویدادشو، در سایت منتشر می‌شود.",
+          "پس از بررسی کارشناسان Kooja، در سایت منتشر می‌شود.",
       });
       router.push(back.href);
       router.refresh();
@@ -482,19 +653,101 @@ export default function NewEventForm({
       </nav>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* ── Step 1 — basics ─────────────────────────────────── */}
+        {/* ── Step 1 — photos, then basics ──────────────────────── */}
         {step === 0 && (
-          <section className={cardClass}>
-            <div className="mb-5 flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300">
-                <Sparkles className="h-4 w-4" />
-              </span>
-              <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                اطلاعات اصلی
-              </h2>
-            </div>
+          <>
+            {/* The photos are the first section of the first step. */}
+            <section className={cardClass}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300">
+                    <Images className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                      تصاویر رویداد
+                    </h2>
+                    <p className="mt-0.5 text-[11px] leading-5 text-slate-400 dark:text-slate-500">
+                      اولین تصویر کاور رویداد می‌شود؛ می‌توانید تا {toFa(MAX_IMAGES)} عکس
+                      اضافه کنید.
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                  {toFa(images.length)} از {toFa(MAX_IMAGES)}
+                </span>
+              </div>
 
-            <div className="space-y-5">
+              <ul className="mt-4 flex flex-wrap gap-3">
+                {images.map((url, index) => (
+                  <li
+                    key={`${url}-${index}`}
+                    className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800"
+                  >
+                    <Image
+                      src={isLocalEventPreview(url) ? url : eventImageUrl(url)}
+                      alt={`تصویر ${toFa(index + 1)} رویداد`}
+                      fill
+                      unoptimized
+                      sizes="96px"
+                      className="object-cover"
+                    />
+                    {index === 0 && (
+                      <span className="absolute start-1.5 top-1.5 rounded-full bg-blue-600 px-1.5 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                        کاور
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      aria-label={`حذف تصویر ${toFa(index + 1)}`}
+                      title="حذف تصویر"
+                      className="absolute end-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-slate-600 shadow-sm backdrop-blur transition-colors duration-200 hover:text-red-600 dark:bg-slate-900/95 dark:text-slate-300 dark:hover:text-red-400"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </li>
+                ))}
+
+                {images.length < MAX_IMAGES && (
+                  <li>
+                    <label
+                      htmlFor="ev-images"
+                      aria-label="افزودن تصویر"
+                      className="flex h-24 w-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-300 bg-slate-50/60 text-slate-500 transition-all duration-200 hover:border-blue-300 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-400 dark:hover:border-blue-800 dark:hover:text-blue-300"
+                    >
+                      <ImagePlus className="h-5 w-5" />
+                      <span className="text-[10px] font-bold leading-4">افزودن تصویر</span>
+                      <input
+                        id="ev-images"
+                        type="file"
+                        accept={IMAGE_TYPES.join(",")}
+                        onChange={handleImageFiles}
+                        className="sr-only"
+                      />
+                    </label>
+                  </li>
+                )}
+              </ul>
+
+              <p className="mt-3 text-[11px] leading-5 text-slate-400 dark:text-slate-500">
+                {images.length >= MAX_IMAGES
+                  ? "ظرفیت تصاویر پر شده است."
+                  : "JPG، PNG، WebP، AVIF یا HEIC — حداکثر ۱۰ مگابایت؛ ذخیره به صورت WebP"}
+              </p>
+            </section>
+
+            <section className={cardClass}>
+              <div className="mb-5 flex items-center gap-2.5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300">
+                  <Sparkles className="h-4 w-4" />
+                </span>
+                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                  اطلاعات اصلی
+                </h2>
+              </div>
+
+              <div className="space-y-5">
               <div>
                 <label htmlFor="ev-title" className={labelClass}>
                   عنوان رویداد
@@ -772,7 +1025,8 @@ export default function NewEventForm({
                 </div>
               )}
             </div>
-          </section>
+            </section>
+          </>
         )}
 
         {/* ── Step 2 — time & place ──────────────────────────── */}
@@ -934,6 +1188,24 @@ export default function NewEventForm({
                     />
                   </div>
 
+                  <div>
+                    <span className={labelClass}>محل دقیق روی نقشه</span>
+                    <p className="mt-1 text-[11px] leading-5 text-slate-400 dark:text-slate-500">
+                      روی نقشه کلیک کنید یا از گوشه بالا، مکان فعلی خود را پیدا کنید.
+                    </p>
+                    <EventMap
+                      selectable
+                      city={initial?.city ?? centralLocation.city}
+                      point={mapPoint}
+                      onSelect={setMapPoint}
+                      className="mt-2 h-64"
+                    />
+                    <p dir="ltr" className="mt-2 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                      {mapPoint
+                        ? `${mapPoint.lat.toFixed(5)}, ${mapPoint.lng.toFixed(5)}`
+                        : "—"}
+                    </p>
+                  </div>
                 </>
               ) : (
                 <div>
@@ -989,23 +1261,35 @@ export default function NewEventForm({
                 {/* Cover */}
                 <div className="relative mx-4 mt-3 aspect-video overflow-hidden rounded-xl">
                   <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`} />
+                  {images[0] && (
+                    <Image
+                      src={isLocalEventPreview(images[0]) ? images[0] : eventImageUrl(images[0])}
+                      alt=""
+                      fill
+                      unoptimized
+                      sizes="(max-width: 1024px) 100vw, 560px"
+                      className="object-cover"
+                    />
+                  )}
                   <div className="absolute inset-0 bg-black/10" />
-                  {CategoryIcon && (
+                  {!images[0] && CategoryIcon && (
                     <span className="absolute inset-0 flex items-center justify-center">
                       <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 text-white ring-1 ring-white/30 backdrop-blur-sm">
                         <CategoryIcon className="h-8 w-8" strokeWidth={1.75} />
                       </span>
                     </span>
                   )}
-                  <button
-                    type="button"
-                    onClick={shuffleGradient}
-                    aria-label="تغییر رنگ کاور"
-                    title="تغییر رنگ کاور"
-                    className="absolute top-2 end-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-600 shadow-sm backdrop-blur transition-all duration-200 hover:text-blue-600 active:scale-95 dark:bg-slate-900/95 dark:text-slate-300 dark:hover:text-blue-400"
-                  >
-                    <RotateCw className="h-4 w-4" />
-                  </button>
+                  {!images[0] && (
+                    <button
+                      type="button"
+                      onClick={shuffleGradient}
+                      aria-label="تغییر رنگ کاور"
+                      title="تغییر رنگ کاور"
+                      className="absolute top-2 end-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-600 shadow-sm backdrop-blur transition-all duration-200 hover:text-blue-600 active:scale-95 dark:bg-slate-900/95 dark:text-slate-300 dark:hover:text-blue-400"
+                    >
+                      <RotateCw className="h-4 w-4" />
+                    </button>
+                  )}
                   <span className="absolute bottom-2 end-2 flex max-w-[85%] items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold text-slate-700 backdrop-blur dark:bg-slate-900/95 dark:text-slate-300">
                     {mode === "online" ? (
                       <>
@@ -1127,8 +1411,71 @@ export default function NewEventForm({
               </div>
             </section>
 
-            {/* Publish + tips */}
+            {/* Right column: promotion, then publish and its guide. */}
             <div className="space-y-4">
+              {/* Promotion */}
+              <section className="rounded-2xl border border-amber-300 bg-gradient-to-br from-amber-50 via-white to-white p-5 shadow-md dark:border-amber-800 dark:from-amber-950/30 dark:via-slate-900 dark:to-slate-900 sm:p-6">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-950/70 dark:text-amber-300">
+                    <Crown className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                      آگهی شما نردبان شود ؟
+                    </h2>
+                    <p className="mt-1 text-xs leading-6 text-slate-500 dark:text-slate-400">
+                      پس از تأیید کارشناسان، رویداد شما در بالای صفحه اصلی و فهرست رویدادها با نشان
+                      سنجاق نمایش داده می‌شود.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200/80 bg-white/70 p-3 dark:border-amber-900/60 dark:bg-slate-950/40">
+                  <div>
+                    <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                      هزینه نمایش ویژه
+                    </p>
+                    <p className="mt-0.5 text-sm font-extrabold text-slate-800 dark:text-slate-100">
+                      {faPrice(promotionPrice)}
+                    </p>
+                  </div>
+                  <div
+                    role="group"
+                    aria-label="نمایش ویژه در بالای فهرست"
+                    className="inline-flex rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-800"
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={promoted}
+                      onClick={() => setPromoted(true)}
+                      className={`rounded-lg px-4 py-1.5 text-xs font-bold transition-all duration-200 ${
+                        promoted
+                          ? "bg-amber-500 text-white shadow-sm"
+                          : "text-slate-500 hover:bg-amber-50 hover:text-amber-700 dark:text-slate-400 dark:hover:bg-amber-950/50 dark:hover:text-amber-300"
+                      }`}
+                    >
+                      بله
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={!promoted}
+                      onClick={() => setPromoted(false)}
+                      className={`rounded-lg px-4 py-1.5 text-xs font-bold transition-all duration-200 ${
+                        !promoted
+                          ? "bg-slate-700 text-white shadow-sm dark:bg-slate-200 dark:text-slate-900"
+                          : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      خیر
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] leading-5 text-slate-400 dark:text-slate-500">
+                  در حال حاضر فقط انتخاب شما ذخیره می‌شود و پرداخت هزینه بعداً اضافه می‌شود.
+                </p>
+              </section>
+
+              {/* Publish + tips */}
               <section className={cardClass}>
                 <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
                   آماده انتشار
@@ -1205,6 +1552,11 @@ export default function NewEventForm({
           </div>
         )}
       </form>
+
+      {/* The decision floats above the wizard; either answer writes the event. */}
+      {showPhotoPrompt && (
+        <PhotoTeamPrompt pending={pending} onAnswer={publish} />
+      )}
     </div>
   );
 }

@@ -13,13 +13,21 @@ import { useServerData } from "@/components/dashboard/useServerData";
  */
 export default function NewEventLoader({
   categoryIcons,
+  promotionPrice,
 }: {
   categoryIcons: Record<string, string>;
+  promotionPrice: number;
 }) {
   const { data, loaded, failed, reload } = useServerData(fetchOrganizerName);
 
   if (failed) return <DataFetchError onRetry={reload} />;
   if (!loaded || !data) return <WizardSkeleton />;
 
-  return <NewEventForm organizerName={data.name} categoryIcons={categoryIcons} />;
+  return (
+    <NewEventForm
+      organizerName={data.name}
+      categoryIcons={categoryIcons}
+      promotionPrice={promotionPrice}
+    />
+  );
 }

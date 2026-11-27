@@ -3,7 +3,7 @@ import ConsoleEventsLoader from "@/components/console/ConsoleEventsLoader";
 
 export const metadata: Metadata = {
   title: "مدیریت رویدادها",
-  description: "بررسی، تأیید و مدیریت رویدادهای ثبت‌شده در کنسول رویدادشو",
+  description: "بررسی، تأیید و مدیریت رویدادهای ثبت‌شده در کنسول Kooja",
 };
 
 /**

@@ -39,10 +39,10 @@ export default function Testimonials() {
             تجربه واقعی کاربران
           </span>
           <h2 className="mt-4 text-xl font-extrabold text-slate-900 dark:text-slate-100 sm:text-2xl">
-            جامعه رویدادشو چه می‌گوید؟
+            جامعه Kooja چه می‌گوید؟
           </h2>
           <p className="mx-auto mt-2 max-w-lg text-sm leading-7 text-slate-500 dark:text-slate-400">
-            نظر برگزارکنندگان و شرکت‌کنندگانی که تجربه واقعی رویدادشو را داشته‌اند.
+            نظر برگزارکنندگان و شرکت‌کنندگانی که تجربه واقعی Kooja را داشته‌اند.
           </p>
         </div>
 

@@ -3,7 +3,7 @@ import MyEventsLoader from "@/components/dashboard/MyEventsLoader";
 
 export const metadata: Metadata = {
   title: "رویدادهای من",
-  description: "رویدادهایی که ساخته‌اید و ثبت‌نام‌های شما در رویدادشو",
+  description: "رویدادهایی که ساخته‌اید و ثبت‌نام‌های شما در Kooja",
 };
 
 /**

@@ -2,6 +2,7 @@
 
 import type { EventCard, EnrolledEvent, HostedEvent } from "@/lib/event-types";
 import type { NotificationFeed } from "@/lib/notification-types";
+import type { TicketsResponse } from "@/lib/ticket-types";
 import type { EventFormValues } from "./NewEventForm";
 import type { SettingsInitial } from "./SettingsForm";
 
@@ -21,6 +22,8 @@ export type OverviewData = {
   enrolled: EnrolledEvent[];
   /** How many events this person has saved — the heart rows, live. */
   savedCount: number;
+  /** Support conversations still waiting for an admin answer. */
+  openTicketCount: number;
 };
 
 export type MyEventsData = {
@@ -51,6 +54,11 @@ export function fetchMyEvents() {
 
 export function fetchSavedEvents() {
   return getJson<EventCard[]>("/api/dashboard/saved");
+}
+
+/** `GET /api/dashboard/tickets` — this account's support conversations. */
+export function fetchMyTickets() {
+  return getJson<TicketsResponse>("/api/dashboard/tickets");
 }
 
 /** `GET /api/dashboard/notifications` — the feed derived from the tables. */

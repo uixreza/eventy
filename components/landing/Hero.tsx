@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import AddEventButton from "@/components/auth/AddEventButton";
+import type { PublicCategory } from "@/lib/categories";
 import MagneticFloat from "./MagneticFloat";
 import SearchBar from "./SearchBar";
 
@@ -93,9 +94,9 @@ const partners = [
   "ابر آروان",
 ];
 
-export default function Hero() {
+export default function Hero({ categories }: { categories: PublicCategory[] }) {
   return (
-    <section className="relative overflow-hidden bg-white dark:bg-slate-950">
+    <section className="relative flex min-h-dvh flex-col overflow-hidden bg-white dark:bg-slate-950">
       {/* Radial backdrop */}
       <div
         aria-hidden="true"
@@ -108,9 +109,9 @@ export default function Hero() {
         className="pointer-events-none absolute -top-24 -end-24 h-80 w-80 rounded-full bg-blue-300/30 blur-3xl dark:bg-blue-900/30"
       />
 
-      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 sm:px-6 lg:px-8">
         {/* ── Orbit field: rings + nodes + central core ─────────── */}
-        <div className="relative flex flex-col items-center pt-24 pb-28 md:pt-28 md:pb-32">
+        <div className="relative flex flex-1 flex-col items-center justify-center pt-16 pb-8 md:pt-20 md:pb-10">
           {/* Concentric rings + accent arcs */}
           <div
             aria-hidden="true"
@@ -214,7 +215,7 @@ export default function Hero() {
 
             {/* Omni search */}
             <div className="mt-8 w-full">
-              <SearchBar />
+              <SearchBar categories={categories} />
             </div>
 
             {/* Live activity toast stack — magnetic: each card drifts toward

@@ -3,7 +3,7 @@ import ConsoleReportsLoader from "@/components/console/ConsoleReportsLoader";
 
 export const metadata: Metadata = {
   title: "گزارش‌ها",
-  description: "تحلیل و گزارش‌های کنسول رویدادشو؛ رشد کاربران، رویدادها و درآمد",
+  description: "تحلیل و گزارش‌های کنسول Kooja؛ رشد کاربران، رویدادها و درآمد",
 };
 
 /**

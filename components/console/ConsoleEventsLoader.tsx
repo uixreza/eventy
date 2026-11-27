@@ -5,6 +5,7 @@ import { useServerData } from "@/components/dashboard/useServerData";
 import ConsoleEvents from "./ConsoleEvents";
 import { fetchConsoleEvents } from "./console-api";
 import { ConsoleEventsSkeleton } from "./ConsoleSkeletons";
+import { refreshConsoleNavCounts } from "./useConsoleNavCounts";
 
 /**
  * Loads the moderation queue on every visit to `/console/events`. The page
@@ -19,5 +20,13 @@ export default function ConsoleEventsLoader() {
   if (failed) return <DataFetchError onRetry={reload} />;
   if (!loaded || !data) return <ConsoleEventsSkeleton />;
 
-  return <ConsoleEvents rows={data.events} onChanged={reload} />;
+  return (
+    <ConsoleEvents
+      rows={data.events}
+      onChanged={() => {
+        reload();
+        refreshConsoleNavCounts();
+      }}
+    />
+  );
 }

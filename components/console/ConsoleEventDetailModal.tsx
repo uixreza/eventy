@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Pencil, X } from "lucide-react";
 import { sileo } from "sileo";
 import { reviewEvent } from "@/app/actions/events";
+import EventImageSlideshow from "@/components/events/EventImageSlideshow";
 import DataFetchError from "@/components/dashboard/DataFetchError";
 import { useServerData } from "@/components/dashboard/useServerData";
 import { eventLifecycleMeta } from "@/lib/event-types";
@@ -170,6 +171,16 @@ export default function ConsoleEventDetailModal({ id, onClose, onChanged }: Moda
               </p>
             ) : (
               <div className="space-y-4">
+                {/* Photos come first, in a wide horizontal gallery, so an
+                    admin can check every image before reading the details. */}
+                {data.images.length > 0 && (
+                  <EventImageSlideshow
+                    images={data.images}
+                    title={data.title}
+                    orientation="horizontal"
+                  />
+                )}
+
                 {/* The copy an admin has to read before approving */}
                 <Section title="خلاصه">
                   {data.summary || (
@@ -211,6 +222,15 @@ export default function ConsoleEventDetailModal({ id, onClose, onChanged }: Moda
                   </Cell>
                   <Cell label="ظرفیت">
                     {data.capacity === null ? "نامشخص" : `${toFa(data.capacity)} نفر`}
+                  </Cell>
+                  <Cell label="نیاز به تیم عکاسی">
+                    {data.needsPhotographyTeam ? (
+                      <span className="text-emerald-600 dark:text-emerald-400">
+                        بله، نیاز دارد
+                      </span>
+                    ) : (
+                      "خیر"
+                    )}
                   </Cell>
                   <Cell label="ثبت‌نام‌ها">
                     {toFa(data.confirmed)} قطعی

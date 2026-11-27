@@ -9,6 +9,7 @@ import {
 } from "@/lib/jalali";
 import type {
   ConsoleAlert,
+  ConsoleNavCounts,
   ConsoleOverview,
   ConsoleReviewRow,
   ConsoleStat,
@@ -150,4 +151,24 @@ export async function getConsoleOverview(): Promise<ConsoleOverview> {
   }));
 
   return { stats, reviews, alerts, broadcasts };
+}
+
+/**
+ * The three numbers that follow the admin around the console menu.
+ *
+ * Same rule as the overview: no `"use cache"`. A badge that lags behind a
+ * review or a reply would be worse than no badge at all, so each read goes
+ * straight to the table. `count()` also avoids the row caps on the list
+ * endpoints (`take: 100` reports, `take: 200` tickets).
+ */
+export async function getConsoleNavCounts(): Promise<ConsoleNavCounts> {
+  const [pendingEvents, eventReports, openTickets] = await Promise.all([
+    prisma.event.count({ where: { status: "PENDING" } }),
+    /* EventReport has no status/read field — a report stays a report. */
+    prisma.eventReport.count(),
+    /* A client follow-up reopens a ticket, so OPEN means "needs an answer". */
+    prisma.supportTicket.count({ where: { status: "OPEN" } }),
+  ]);
+
+  return { pendingEvents, eventReports, openTickets };
 }

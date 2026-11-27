@@ -5,7 +5,7 @@ import SupportForm from "@/components/support/SupportForm";
 export const metadata: Metadata = {
   title: "پشتیبانی",
   description:
-    "تماس با پشتیبانی رویدادشو؛ ایمیل، تلفن و فرم پیام برای پیگیری ثبت‌نام، پرداخت و برگزاری رویدادها",
+    "تماس با پشتیبانی Kooja؛ ایمیل، تلفن و فرم پیام برای پیگیری ثبت‌نام، پرداخت و برگزاری رویدادها",
 };
 
 const channels = [
@@ -42,7 +42,7 @@ export default function SupportPage() {
       <div className="text-center">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
           <Headset className="h-3.5 w-3.5" />
-          پشتیبانی رویدادشو
+          پشتیبانی Kooja
         </span>
         <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
           در کنارتان هستیم

@@ -3,7 +3,7 @@ import OverviewView from "@/components/dashboard/OverviewView";
 
 export const metadata: Metadata = {
   title: "داشبورد",
-  description: "پنل کاربری رویدادشو؛ رویدادها و علاقه‌مندی‌های شما",
+  description: "پنل کاربری Kooja؛ رویدادها و علاقه‌مندی‌های شما",
 };
 
 /**

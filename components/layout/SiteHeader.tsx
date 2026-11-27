@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import { ArrowLeft, ChevronDown, Headset, LayoutGrid, Menu, Search, X, Zap } from "lucide-react";
@@ -34,13 +35,24 @@ const restingShell =
 const scrolledShell =
   "bg-white/95 border-slate-300/80 shadow-xl shadow-slate-900/10 dark:bg-slate-900/95 dark:border-slate-600/80 dark:shadow-black/40";
 
-export default function SiteHeader({ categories }: { categories: PublicCategory[] }) {
+export default function SiteHeader({
+  categories,
+  announcementText = "",
+}: {
+  categories: PublicCategory[];
+  announcementText?: string;
+}) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
 
   /* The central location: the header owns the picker, and every event form
      starts from the city chosen here. */
+  const pathname = usePathname();
+  /* The ad strip sits in the landing page's normal flow at y=0, so the fixed
+     header starts below its 2rem height. Once scrolled, the strip is gone and
+     the header returns to its usual resting offsets. */
+  const restsBelowAnnouncement = pathname === "/" && announcementText.trim().length > 0;
   const { location, setLocation } = useLocation();
 
   /* Session: the sign-in button becomes the client's name (a "signed-in"
@@ -49,10 +61,12 @@ export default function SiteHeader({ categories }: { categories: PublicCategory[
   const authenticated = status === "authenticated";
 
   /* The landing-page location picker stays disabled until the user is logged
-     in and real data (session resolved) has been retrieved. */
+     in and real data (session resolved) has been retrieved. On /events the
+     picker is the city filter, so it is always available there. */
   const [dataRetrieved, setDataRetrieved] = useState(false);
   const [, startTransition] = useTransition();
-  const canChangeLocation = authenticated && dataRetrieved;
+  const isEventsPage = pathname === "/events";
+  const canChangeLocation = isEventsPage || (authenticated && dataRetrieved);
 
   /** Prompt the user to log in before they can pick a province/city. */
   function promptLogin() {
@@ -104,7 +118,11 @@ export default function SiteHeader({ categories }: { categories: PublicCategory[
     <header
       ref={headerRef}
       className={`fixed inset-x-0 z-50 mx-auto w-full select-none px-4 transition-[top,max-width] duration-300 ease-out ${
-        scrolled ? "top-3 max-w-6xl" : "top-0 max-w-5xl"
+        scrolled
+          ? "top-3 max-w-6xl"
+          : restsBelowAnnouncement
+            ? "top-8 max-w-5xl"
+            : "top-0 max-w-5xl"
       }`}
     >
       {/* ── Floating pill bar ─────────────────────────────────── */}
@@ -117,7 +135,7 @@ export default function SiteHeader({ categories }: { categories: PublicCategory[
         <Link
           href="/"
           className="shrink-0 transition-opacity hover:opacity-80"
-          aria-label="رویدادشو — صفحه اصلی"
+          aria-label="Kooja — صفحه اصلی"
         >
           <BrandMark className="text-lg sm:text-xl" />
         </Link>

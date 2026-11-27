@@ -26,7 +26,7 @@ try {
     update: { role: "ADMIN" },
     create: {
       phone,
-      name: process.env.ADMIN_NAME ?? "مدیر رویدادشو",
+      name: process.env.ADMIN_NAME ?? "مدیر Kooja",
       nationalId: "0012345679",
       birthDate: new Date("1990-01-01T00:00:00.000Z"),
       role: "ADMIN",

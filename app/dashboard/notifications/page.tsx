@@ -3,7 +3,7 @@ import NotificationsView from "@/components/dashboard/NotificationsView";
 
 export const metadata: Metadata = {
   title: "اعلان‌ها",
-  description: "اعلان‌ها، یادآوری‌ها و به‌روزرسانی‌های رویدادشو",
+  description: "اعلان‌ها، یادآوری‌ها و به‌روزرسانی‌های Kooja",
 };
 
 /**

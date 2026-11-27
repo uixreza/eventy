@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import EditEventLoader from "@/components/dashboard/EditEventLoader";
 import PageLoader from "@/components/ui/PageLoader";
 import { getCategoryIcons } from "@/lib/categories";
+import { getPublicPricing } from "@/lib/pricing";
 
 export const metadata: Metadata = {
   title: "ویرایش رویداد",
@@ -30,6 +31,15 @@ export default function EditEventPage({ params }: EditEventParams) {
 
 async function EditEventContent({ params }: EditEventParams) {
   const { id } = await params;
-  const categoryIcons = await getCategoryIcons();
-  return <EditEventLoader id={id} categoryIcons={categoryIcons} />;
+  const [categoryIcons, pricing] = await Promise.all([
+    getCategoryIcons(),
+    getPublicPricing(),
+  ]);
+  return (
+    <EditEventLoader
+      id={id}
+      categoryIcons={categoryIcons}
+      promotionPrice={pricing.promotionPrice}
+    />
+  );
 }

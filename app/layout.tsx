@@ -5,6 +5,7 @@ import { Toaster } from "sileo";
 import AuthSessionProvider from "@/components/auth/SessionProvider";
 import BroadcastToaster from "@/components/layout/BroadcastToaster";
 import { LocationProvider } from "@/components/layout/LocationProvider";
+import "leaflet/dist/leaflet.css";
 import "./globals.css";
 
 const morabba = localFont({
@@ -37,11 +38,11 @@ const dana = localFont({
 
 export const metadata: Metadata = {
   title: {
-    default: "رویدادشو | دورهمی‌ها و کشف رویدادها",
-    template: "%s | رویدادشو",
+    default: "Kooja | دورهمی‌ها و کشف رویدادها",
+    template: "%s | Kooja",
   },
   description:
-    "رویدادشو؛ جایی برای دورهمی‌های واقعی، شبکه‌سازی و کشف رویدادها در ایران.",
+    "Kooja؛ جایی برای دورهمی‌های واقعی، شبکه‌سازی و کشف رویدادها در ایران.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

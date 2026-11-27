@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getHostedEvent } from "@/lib/events";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { eventMapCenter } from "@/lib/map";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -26,6 +27,15 @@ export async function GET(_request: Request, context: RouteContext) {
     where: { id: userId },
     select: { name: true },
   });
+  /* Older in-person rows have no pin — give the form the city centre so the
+     map is never blank and a save stores a real point. */
+  const pin =
+    event.mode === "ONLINE"
+      ? null
+      : eventMapCenter(event.city, {
+          lat: event.latitude ?? Number.NaN,
+          lng: event.longitude ?? Number.NaN,
+        });
 
   return NextResponse.json({
     organizerName: row?.name ?? session.user.name ?? "",
@@ -36,12 +46,17 @@ export async function GET(_request: Request, context: RouteContext) {
       description: event.description || event.summary,
       city: event.city,
       venue: event.venue,
+      latitude: pin?.lat ?? null,
+      longitude: pin?.lng ?? null,
       onlineUrl: event.onlineUrl ?? "",
       capacity: event.capacity,
       highlights: event.highlights,
       agenda: event.agenda,
       price: event.price,
       gradient: event.gradient,
+      images: event.images,
+      needsPhotographyTeam: event.needsPhotographyTeam,
+      promoted: event.promoted,
       mode: event.mode,
       jy: event.jy,
       jm: event.jm,

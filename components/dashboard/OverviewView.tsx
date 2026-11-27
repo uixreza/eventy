@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Calendar,
   Heart,
+  LifeBuoy,
   Plus,
   Settings,
   Ticket,
@@ -20,6 +21,7 @@ import { toFa } from "@/lib/utils";
 type OverviewStat = {
   label: string;
   value: string;
+  href: string;
   icon: LucideIcon;
   tint: string;
 };
@@ -36,6 +38,7 @@ const dashboardSections: DashboardSection[] = [
   { title: "رویدادهای من", href: "/dashboard/events", description: "رویدادهایی که ساخته‌اید و ثبت‌نام‌های شما", icon: Calendar },
   { title: "علاقه‌مندی‌ها", href: "/dashboard/saved", description: "رویدادهای ذخیره‌شده برای بعد", icon: Heart },
   { title: "پروفایل و تنظیمات", href: "/dashboard/settings", description: "نام، تاریخ تولد و کد ملی شما", icon: Settings },
+  { title: "تیکت", href: "/dashboard/tickets", description: "پیام‌ها و پاسخ‌های پشتیبانی", icon: LifeBuoy },
 ];
 
 /** The badge each lifecycle state wears — the label is the row's real status. */
@@ -90,20 +93,30 @@ export default function OverviewView() {
     {
       label: "رویدادهای پیش رو",
       value: toFa(upcomingHosted.length + activeTickets.length),
+      href: "/dashboard/events",
       icon: Calendar,
       tint: "bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300",
     },
     {
       label: "بلیت‌های فعال",
       value: toFa(activeTickets.length),
+      href: "/dashboard/events",
       icon: Ticket,
       tint: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300",
     },
     {
       label: "ذخیره‌شده‌ها",
       value: toFa(data.savedCount),
+      href: "/dashboard/saved",
       icon: Heart,
       tint: "bg-pink-50 text-pink-600 dark:bg-pink-950 dark:text-pink-300",
+    },
+    {
+      label: "تیکت‌های باز",
+      value: toFa(data.openTicketCount),
+      href: "/dashboard/tickets",
+      icon: LifeBuoy,
+      tint: "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300",
     },
   ];
 
@@ -157,13 +170,14 @@ export default function OverviewView() {
       </div>
 
       {/* Overview stats */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {overviewStats.map((s) => {
           const Icon = s.icon;
           return (
-            <div
+            <Link
               key={s.label}
-              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-md transition-all duration-200 hover:shadow-lg dark:border-slate-700 dark:bg-slate-900 sm:p-5"
+              href={s.href}
+              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-800 sm:p-5"
             >
               <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${s.tint}`}>
                 <Icon className="h-[18px] w-[18px]" />
@@ -174,7 +188,7 @@ export default function OverviewView() {
               <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
                 {s.label}
               </p>
-            </div>
+            </Link>
           );
         })}
       </div>

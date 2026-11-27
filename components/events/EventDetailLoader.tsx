@@ -51,6 +51,7 @@ export default function EventDetailLoader({ slug }: { slug: string }) {
       event={event}
       details={details}
       similar={similar}
+      isOwner={enrollment.isOwner}
       action={
         <EnrollButton
           eventId={event.id}

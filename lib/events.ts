@@ -47,10 +47,14 @@ type EventRow = {
   city: string;
   venue: string;
   mode: "INPERSON" | "ONLINE";
+  latitude: number | null;
+  longitude: number | null;
   startsAt: Date;
   capacity: number | null;
   price: number | null;
+  promoted: boolean;
   coverGradient: string;
+  images: string[];
   status: string;
   organizerName: string;
 };
@@ -96,11 +100,14 @@ function toCard(
     city: event.city,
     venue: event.venue,
     mode: event.mode as EventMode,
+    latitude: event.latitude,
+    longitude: event.longitude,
     date: formatJalaliDate(event.startsAt),
     time: formatJalaliTime(event.startsAt),
     dateTime: formatJalaliDateTime(event.startsAt),
     status,
     price: event.price,
+    promoted: event.promoted,
     /* An event that is over no longer has seats to hand out; one with no
        fixed capacity has no seat count at all. */
     seatsLeft:
@@ -111,6 +118,7 @@ function toCard(
     capacity: event.capacity,
     organizer: event.organizerName,
     gradient: event.coverGradient,
+    images: event.images,
     jy: parts.jy,
     jm: parts.jm,
     jd: parts.jd,
@@ -121,8 +129,8 @@ function toCard(
  * Every published event — the list of `/events`.
  *
  * Only `PUBLISHED` rows are visible: an event waiting for moderation or sent
- * back for changes must never reach the public pages. Newest first, so a
- * freshly published event heads the list.
+ * back for changes must never reach the public pages. Promoted events lead
+ * the list; the rest follow newest first.
  */
 export async function getPublishedEvents(): Promise<EventCard[]> {
   "use cache";
@@ -134,7 +142,7 @@ export async function getPublishedEvents(): Promise<EventCard[]> {
   const [events, categoryIcons] = await Promise.all([
     prisma.event.findMany({
       where: { status: "PUBLISHED" },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ promoted: "desc" }, { createdAt: "desc" }],
     }),
     getCategoryIcons(),
   ]);
@@ -151,8 +159,9 @@ export async function getPublishedEvents(): Promise<EventCard[]> {
  * Published events that have not started yet, soonest first. A card on the
  * landing page offers a seat, so an event whose start time has passed must
  * never appear here — the grid shows what is actually open for sign-up, and
- * the six nearest fill it. Same cache contract as `getPublishedEvents`, so
- * every publish/edit lands on the next render.
+ * the six nearest fill it. A promoted event is pinned ahead of the rest.
+ * Same cache contract as `getPublishedEvents`, so every publish/edit lands
+ * on the next render.
  */
 export async function getHotEvents(): Promise<EventCard[]> {
   "use cache";
@@ -162,7 +171,7 @@ export async function getHotEvents(): Promise<EventCard[]> {
 
   const events = await prisma.event.findMany({
     where: { status: "PUBLISHED", startsAt: { gte: new Date() } },
-    orderBy: { startsAt: "asc" },
+    orderBy: [{ promoted: "desc" }, { startsAt: "asc" }],
     take: 6,
   });
 
@@ -242,7 +251,7 @@ export async function getEventBySlug(
 }
 
 /**
- * Other published events of the same category — the «رویدادهای مشابه» list.
+ * Other published events of the same category — the «دیگه کوجا ؟» list.
  * Like the detail read, this is uncached so the slug page's sidebar changes
  * with the table on the very next request.
  */
@@ -304,6 +313,7 @@ export async function getHostedEvents(userId: string): Promise<HostedEvent[]> {
       waitlist: count.waitlist,
       price: event.price,
       gradient: event.coverGradient,
+      images: event.images,
       jy: parts.jy,
       jm: parts.jm,
       jd: parts.jd,
@@ -349,6 +359,7 @@ export async function getEnrolledEvents(userId: string): Promise<EnrolledEvent[]
       eventStatus: event.status as EventLifecycle,
       price: event.price,
       gradient: event.coverGradient,
+      images: event.images,
       jy: parts.jy,
       jm: parts.jm,
       jd: parts.jd,
@@ -416,12 +427,17 @@ export async function getHostedEvent(
   city: string;
   venue: string;
   mode: EventMode;
+  latitude: number | null;
+  longitude: number | null;
   onlineUrl: string | null;
   capacity: number | null;
   highlights: string[];
   agenda: EventAgendaItem[];
   price: number | null;
   gradient: string;
+  images: string[];
+  needsPhotographyTeam: boolean;
+  promoted: boolean;
   status: EventLifecycle;
   dateTime: string;
   jy: number;
@@ -451,12 +467,17 @@ export async function getHostedEvent(
     city: event.city,
     venue: event.venue,
     mode: event.mode as EventMode,
+    latitude: event.latitude,
+    longitude: event.longitude,
     onlineUrl: event.onlineUrl,
     capacity: event.capacity,
     highlights: event.highlights,
     agenda: parseAgenda(event.agenda),
     price: event.price,
     gradient: event.coverGradient,
+    images: event.images,
+    needsPhotographyTeam: event.needsPhotographyTeam,
+    promoted: event.promoted,
     status: event.status as EventLifecycle,
     dateTime: formatJalaliDateTime(event.startsAt),
     jy: parts.jy,
@@ -547,6 +568,8 @@ export async function getConsoleEvent(eventId: string): Promise<ConsoleEventDeta
     city: event.city,
     venue: event.venue,
     mode: event.mode as EventMode,
+    latitude: event.latitude,
+    longitude: event.longitude,
     onlineUrl: event.onlineUrl,
     status: event.status as EventLifecycle,
     dateTime: formatJalaliDateTime(event.startsAt),
@@ -560,6 +583,9 @@ export async function getConsoleEvent(eventId: string): Promise<ConsoleEventDeta
     agenda: parseAgenda(event.agenda),
     price: event.price,
     gradient: event.coverGradient,
+    images: event.images,
+    needsPhotographyTeam: event.needsPhotographyTeam,
+    promoted: event.promoted,
     organizerName: event.organizerName,
     organizer: event.organizer
       ? { id: event.organizer.id, name: event.organizer.name, phone: event.organizer.phone }

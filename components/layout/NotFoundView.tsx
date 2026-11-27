@@ -66,7 +66,7 @@ export default function NotFoundView() {
         <motion.div variants={item}>
           <Link
             href="/"
-            aria-label="رویدادشو — صفحه اصلی"
+            aria-label="Kooja — صفحه اصلی"
             className="inline-block transition-opacity hover:opacity-80"
           >
             <BrandMark className="text-lg sm:text-xl" />

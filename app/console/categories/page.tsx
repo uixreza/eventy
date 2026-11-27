@@ -3,7 +3,7 @@ import ConsoleCategoriesLoader from "@/components/console/ConsoleCategoriesLoade
 
 export const metadata: Metadata = {
   title: "دسته‌بندی‌ها",
-  description: "مدیریت دسته‌بندی‌های رویدادها در کنسول رویدادشو",
+  description: "مدیریت دسته‌بندی‌های رویدادها در کنسول Kooja",
 };
 
 /** Shell only — the category rows are fetched by the client loader. */

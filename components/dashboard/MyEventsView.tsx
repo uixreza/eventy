@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -19,6 +20,7 @@ import { sileo } from "sileo";
 import EventsHeatmap from "@/components/dashboard/EventsHeatmap";
 import { confirm } from "@/components/ui/confirm";
 import { cancelRegistration, deleteEvent, toggleReminder } from "@/app/actions/events";
+import { eventImageUrl } from "@/lib/event-images";
 import { eventLifecycleMeta, registrationStateMeta } from "@/lib/event-types";
 import type { EnrolledEvent, HostedEvent } from "@/lib/event-types";
 import { faPrice, shamsiMonths, toFa } from "@/lib/utils";
@@ -31,6 +33,37 @@ const ghostButton =
 
 const dangerButton =
   "rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-600 transition-all duration-200 hover:border-red-200 hover:text-red-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-red-900 dark:hover:text-red-400";
+
+type CoverData = { images: string[]; gradient: string; jd: number; jm: number };
+
+/**
+ * The small date tile on a card. When the organizer added photos the first
+ * one becomes the tile's cover; the gradient stays underneath as a fallback
+ * and for events with no photos. The dark wash keeps the date legible.
+ */
+function EventDateCover({ event }: { event: CoverData }) {
+  const cover = event.images[0];
+  return (
+    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl sm:h-20 sm:w-20">
+      <div className={`absolute inset-0 bg-gradient-to-br ${event.gradient}`} />
+      {cover && (
+        <Image
+          src={eventImageUrl(cover)}
+          alt=""
+          fill
+          unoptimized
+          sizes="(max-width: 640px) 64px, 80px"
+          className="object-cover"
+        />
+      )}
+      <div className={`absolute inset-0 ${cover ? "bg-black/40" : "bg-black/10"}`} />
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
+        <span className="text-lg font-extrabold leading-none">{toFa(event.jd)}</span>
+        <span className="mt-1 text-[10px] font-bold">{shamsiMonths[event.jm - 1].label}</span>
+      </div>
+    </div>
+  );
+}
 
 type MyEventsViewProps = {
   /** The events the signed-in user created. */
@@ -196,16 +229,7 @@ export default function MyEventsView({ hosted, enrolled, onChanged }: MyEventsVi
                   className="grid grid-cols-1 gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-md dark:border-slate-700 dark:bg-slate-900 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center"
                 >
                   {/* Date cover */}
-                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl sm:h-20 sm:w-20">
-                    <div className={`absolute inset-0 bg-gradient-to-br ${event.gradient}`} />
-                    <div className="absolute inset-0 bg-black/10" />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-                      <span className="text-lg font-extrabold leading-none">{toFa(event.jd)}</span>
-                      <span className="mt-1 text-[10px] font-bold">
-                        {shamsiMonths[event.jm - 1].label}
-                      </span>
-                    </div>
-                  </div>
+                  <EventDateCover event={event} />
 
                   {/* Info */}
                   <div className="min-w-0 flex-1">
@@ -308,16 +332,7 @@ export default function MyEventsView({ hosted, enrolled, onChanged }: MyEventsVi
                   className="grid grid-cols-1 gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-md dark:border-slate-700 dark:bg-slate-900 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center"
                 >
                   {/* Date cover */}
-                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl sm:h-20 sm:w-20">
-                    <div className={`absolute inset-0 bg-gradient-to-br ${event.gradient}`} />
-                    <div className="absolute inset-0 bg-black/10" />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-                      <span className="text-lg font-extrabold leading-none">{toFa(event.jd)}</span>
-                      <span className="mt-1 text-[10px] font-bold">
-                        {shamsiMonths[event.jm - 1].label}
-                      </span>
-                    </div>
-                  </div>
+                  <EventDateCover event={event} />
 
                   {/* Info */}
                   <div className="min-w-0 flex-1">

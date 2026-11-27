@@ -60,7 +60,7 @@ export default function HowItWorks() {
             سه قدم، از کشف تا حضور
           </span>
           <h2 className="mt-4 text-xl font-extrabold text-slate-900 dark:text-slate-100 sm:text-2xl">
-            «رویدادشو» چگونه کار می‌کند؟
+            «Kooja» چگونه کار می‌کند؟
           </h2>
           <p className="mx-auto mt-2 max-w-xl text-sm leading-7 text-slate-500 dark:text-slate-400">
             از کشف رویداد تا حضور در رویداد، فقط سه قسمت ساده در پیش دارید.
@@ -134,7 +134,7 @@ export default function HowItWorks() {
               آماده‌ای شروع کنی؟
             </p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              رویداد بعدی تو همین امروز روی «رویدادشو» منتشر می‌شود.
+              رویداد بعدی تو همین امروز روی «Kooja» منتشر می‌شود.
             </p>
           </div>
           <AddEventButton

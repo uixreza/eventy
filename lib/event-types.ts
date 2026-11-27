@@ -79,6 +79,9 @@ export type EventCard = {
   city: string;
   venue: string;
   mode: EventMode;
+  /** Exact map pin — `null` for online or older in-person events. */
+  latitude: number | null;
+  longitude: number | null;
   /** «۲۸ آبان» */
   date: string;
   /** «۱۶:۰۰» */
@@ -87,6 +90,8 @@ export type EventCard = {
   dateTime: string;
   status: EventTimeState;
   price: number | null;
+  /** Organizer paid for top placement — pinned first on public listings. */
+  promoted: boolean;
   /** Free seats — `null` once the event is over or sign-ups are closed. */
   seatsLeft: number | null;
   /** People who hold a confirmed seat. */
@@ -95,6 +100,8 @@ export type EventCard = {
   capacity: number | null;
   organizer: string;
   gradient: string;
+  /** Private-bucket object keys in display order — the first is the cover. */
+  images: string[];
   /** Jalali parts of the start date — the heatmap bins by them. */
   jy: number;
   jm: number;
@@ -123,6 +130,8 @@ export type HostedEvent = {
   waitlist: number;
   price: number | null;
   gradient: string;
+  /** Private-bucket object keys — the first one is used as the card cover. */
+  images: string[];
   jy: number;
   jm: number;
   jd: number;
@@ -151,6 +160,8 @@ export type EnrolledEvent = {
   eventStatus: EventLifecycle;
   price: number | null;
   gradient: string;
+  /** Private-bucket object keys — the first one is used as the card cover. */
+  images: string[];
   jy: number;
   jm: number;
   jd: number;
@@ -193,6 +204,8 @@ export type ConsoleEventDetail = {
   city: string;
   venue: string;
   mode: EventMode;
+  latitude: number | null;
+  longitude: number | null;
   onlineUrl: string | null;
   status: EventLifecycle;
   /** Jalali date-time of the start, formatted for display. */
@@ -212,6 +225,12 @@ export type ConsoleEventDetail = {
   /** `null` means free. */
   price: number | null;
   gradient: string;
+  /** Private-bucket object keys in display order — the first is the cover. */
+  images: string[];
+  /** Publish-time answer for the managers only; absent from the public card. */
+  needsPhotographyTeam: boolean;
+  /** Whether this event is set to lead the public listings once published. */
+  promoted: boolean;
   organizerName: string;
   /** The organizer's account, when the event still has one. */
   organizer: { id: string; name: string; phone: string } | null;

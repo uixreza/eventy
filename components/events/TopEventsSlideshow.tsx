@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ChevronLeft, ChevronRight, Clock, MapPin, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Clock, MapPin, Pin, Sparkles } from "lucide-react";
 import { eventStatusMeta } from "@/lib/data";
 import type { EventCard } from "@/lib/event-types";
+import { eventImageUrl } from "@/lib/event-images";
 import { faPrice, toFa } from "@/lib/utils";
 
 /** Auto-advance delay for the top-events banner. */
@@ -23,11 +25,15 @@ const AUTOPLAY_MS = 5000;
  *   own badges climb high on a short banner) and overlays it from `sm` up.
  */
 export default function TopEventsSlideshow({ events }: { events: EventCard[] }) {
-  /* Live and upcoming first (soonest at the top), ended ones only as filler. */
-  const slides = [
-    ...events.filter((event) => event.status !== "ended"),
-    ...events.filter((event) => event.status === "ended"),
-  ].slice(0, 5);
+  /* Promoted events lead; live/upcoming follow, ended ones are only filler.
+     The incoming order already has soonest first within each group. */
+  const slides = [...events]
+    .sort(
+      (a, b) =>
+        Number(b.promoted) - Number(a.promoted) ||
+        Number(a.status === "ended") - Number(b.status === "ended"),
+    )
+    .slice(0, 5);
   const count = slides.length;
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -58,7 +64,7 @@ export default function TopEventsSlideshow({ events }: { events: EventCard[] }) 
       <div
         aria-roledescription="carousel"
         aria-label="رویدادهای برتر"
-        className="relative h-72 select-none overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 shadow-lg dark:border-slate-700 sm:h-80 lg:h-96"
+        className="relative h-72 select-none overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 shadow-lg sm:h-80 lg:h-96 dark:border-slate-700"
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
         onFocus={() => setPaused(true)}
@@ -85,8 +91,30 @@ export default function TopEventsSlideshow({ events }: { events: EventCard[] }) 
                 i === index ? "opacity-100" : "pointer-events-none opacity-0"
               }`}
             >
-              {/* Gradient placeholder (image stand-in) + readability overlay */}
+              {/* The gradient always stays underneath. When the event has a
+                  photo, it sits on the visual left and dissolves into the
+                  gradient before it reaches the copy on the right (RTL). */}
               <div className={`absolute inset-0 bg-gradient-to-br ${event.gradient}`} />
+              {event.images[0] && (
+                <div
+                  className="absolute inset-y-0 left-0 w-3/4 overflow-hidden opacity-90 sm:w-3/5 lg:w-1/2"
+                  style={{
+                    maskImage: "linear-gradient(to right, black 0%, black 35%, transparent 100%)",
+                    WebkitMaskImage:
+                      "linear-gradient(to right, black 0%, black 35%, transparent 100%)",
+                  }}
+                >
+                  <Image
+                    src={eventImageUrl(event.images[0])}
+                    alt=""
+                    fill
+                    unoptimized
+                    priority={i === 0}
+                    sizes="(max-width: 640px) 75vw, (max-width: 1024px) 60vw, 50vw"
+                    className="object-cover"
+                  />
+                </div>
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-slate-950/15" />
 
               {/* Copy */}
@@ -100,6 +128,12 @@ export default function TopEventsSlideshow({ events }: { events: EventCard[] }) 
                     )}
                     {status.label}
                   </span>
+                  {event.promoted && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-amber-950 shadow-sm">
+                      <Pin className="h-3.5 w-3.5" />
+                      رویداد ویژه
+                    </span>
+                  )}
                   <span className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
                     {event.category}
                   </span>

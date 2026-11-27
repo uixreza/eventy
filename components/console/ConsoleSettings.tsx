@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, RotateCcw, Save, ShieldCheck } from "lucide-react";
+import { Crown, Loader2, LockKeyhole, RotateCcw, Save, ShieldCheck } from "lucide-react";
 import { sileo } from "sileo";
+import { savePromotionPrice } from "@/app/actions/pricing";
+import { MAX_SITE_PRICE, type SitePricingData } from "@/lib/pricing-types";
+import { faNumber, faPrice, normalizeDigits } from "@/lib/utils";
 import { MOCK_CLASS } from "./mock";
 
 const cardClass =
@@ -108,7 +111,7 @@ const initialToggles: Record<string, boolean> = Object.fromEntries(
 );
 
 const initialFields = {
-  siteName: "رویدادشو",
+  siteName: "Kooja",
   supportPhone: "۰۲۱-۹۱۰۰۱۲۳۴",
   maxCapacity: "۵۰۰",
 };
@@ -153,10 +156,20 @@ function ToggleRow({
   );
 }
 
-export default function ConsoleSettings() {
+export default function ConsoleSettings({
+  pricing,
+  onChanged,
+}: {
+  pricing: SitePricingData;
+  onChanged: () => void;
+}) {
   const [toggles, setToggles] = useState<Record<string, boolean>>(initialToggles);
   const [fields, setFields] = useState(initialFields);
   const [pending, setPending] = useState(false);
+  /* The server supplies grouped Persian digits; typing accepts either script. */
+  const [promotionInput, setPromotionInput] = useState(faNumber(pricing.promotionPrice));
+  const [pricePending, setPricePending] = useState(false);
+  const previewPrice = Number(normalizeDigits(promotionInput) || "0");
 
   const setToggle = (key: string, value: boolean) =>
     setToggles((prev) => ({ ...prev, [key]: value }));
@@ -164,15 +177,44 @@ export default function ConsoleSettings() {
   const setField = (key: keyof typeof initialFields, value: string) =>
     setFields((prev) => ({ ...prev, [key]: value }));
 
+  async function handlePriceSave() {
+    if (pricePending) return;
+    const digits = normalizeDigits(promotionInput);
+    const value = Number(digits);
+    if (!digits || !Number.isSafeInteger(value) || value < 0 || value > MAX_SITE_PRICE) {
+      sileo.error({
+        title: "قیمت تبلیغ نامعتبر است",
+        description: `عددی بین ۰ و ${faNumber(MAX_SITE_PRICE)} تومان وارد کنید.`,
+      });
+      return;
+    }
+
+    setPricePending(true);
+    try {
+      const result = await savePromotionPrice(digits);
+      if (!result.ok) {
+        sileo.error({ title: result.error, description: "دوباره تلاش کنید." });
+        return;
+      }
+      sileo.success({
+        title: "قیمت ذخیره شد",
+        description: "قیمت جدید در مرحله سوم ثبت رویداد نمایش داده می‌شود.",
+      });
+      onChanged();
+    } finally {
+      setPricePending(false);
+    }
+  }
+
   function handleSave(event: React.FormEvent) {
     event.preventDefault();
-    /* Mock save — the console runs on display data for now. */
+    /* Mock save — only the price card above writes to the database for now. */
     setPending(true);
     window.setTimeout(() => {
       setPending(false);
       sileo.success({
-        title: "تنظیمات ذخیره شد",
-        description: "تغییرات سراسری کنسول با موفقیت اعمال شد.",
+        title: "تنظیمات نمایشی ذخیره شد",
+        description: "قیمت‌ها به صورت جداگانه در دیتابیس ذخیره می‌شوند.",
       });
     }, 600);
   }
@@ -205,6 +247,91 @@ export default function ConsoleSettings() {
 
   return (
     <form onSubmit={handleSave} className="space-y-6">
+      {/* ── Prices — the only card wired to the database ────── */}
+      <section className="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm dark:border-amber-900/70 dark:bg-slate-900">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-950/70 dark:text-amber-300">
+              <Crown className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className={headingClass}>قیمت‌های سایت</h2>
+              <p className="mt-1 text-xs leading-6 text-slate-500 dark:text-slate-400">
+                قیمت نمایش ویژه رویدادها در مرحله سوم ثبت رویداد استفاده می‌شود.
+              </p>
+            </div>
+          </div>
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+            همگام با دیتابیس
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          {/* Event price: read-only mock, kept visible until it is wired. */}
+          <div className={MOCK_CLASS}>
+            <label htmlFor="console-event-price" className={subLabelClass}>
+              قیمت ثبت رویداد (موقت)
+            </label>
+            <div className={`${fieldClass} flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60`}>
+              <span id="console-event-price" className="font-bold">
+                {faPrice(pricing.eventPrice)}
+              </span>
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-400 dark:text-slate-500">
+                <LockKeyhole className="h-3 w-3" />
+                فقط نمایشی
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+              فعلاً تغییری روی آن اعمال نمی‌شود.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="console-promotion-price" className={subLabelClass}>
+              قیمت نمایش در بالای فهرست (تومان)
+            </label>
+            <div className="relative">
+              <input
+                id="console-promotion-price"
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                value={promotionInput}
+                onChange={(e) => setPromotionInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handlePriceSave();
+                  }
+                }}
+                className={`${fieldClass} pe-14 text-right`}
+              />
+              <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-[11px] font-bold text-slate-400 dark:text-slate-500">
+                تومان
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+              پیشنمایش: {faPrice(Number.isSafeInteger(previewPrice) ? previewPrice : 0)}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+          <p className="text-[11px] leading-5 text-slate-400 dark:text-slate-500">
+            پس از ذخیره، قیمت جدید بلافاصله در مراحل ثبت رویداد دیده می‌شود.
+          </p>
+          <button
+            type="button"
+            disabled={pricePending}
+            onClick={handlePriceSave}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all duration-200 hover:bg-amber-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {pricePending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            ذخیره قیمت
+          </button>
+        </div>
+      </section>
+
       {/* ── General ─────────────────────────────────────────── */}
       <div className={`${cardClass} ${MOCK_CLASS}`}>
         <h2 className={headingClass}>اطلاعات عمومی</h2>
