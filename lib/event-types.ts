@@ -109,7 +109,7 @@ export type EventCard = {
 };
 
 /** An event the signed-in user created. */
-export type HostedEvent = {
+export type HostedEvent = EventModerationInfo & {
   id: string;
   slug: string;
   title: string;
@@ -171,8 +171,22 @@ export type EnrolledEvent = {
   isPast: boolean;
 };
 
+/** Result of the last OpenAI moderation pass, shown in the console. */
+export type EventModerationInfo = {
+  /** A clean AI pass. The event still waits for an admin's approval. */
+  moderationApproved: boolean;
+  /** Issues were found, so AI rejected the event. */
+  moderationFlagged: boolean;
+  /** Raw OpenAI category keys, e.g. `violence/graphic`. */
+  moderationCategories: string[];
+  /** ISO timestamp of the last attempt, including failed ones. */
+  moderationCheckedAt: string | null;
+  /** Persian explanation of the result, or why no check could run. */
+  moderationNote: string | null;
+};
+
 /** A row of the moderation table in `/console/events`. */
-export type ConsoleEventRow = {
+export type ConsoleEventRow = EventModerationInfo & {
   id: string;
   slug: string;
   title: string;
@@ -194,7 +208,7 @@ export type ConsoleEventRow = {
  * One event in full — everything the review modal shows and the console
  * edit form starts from, so an admin can read every field before approving.
  */
-export type ConsoleEventDetail = {
+export type ConsoleEventDetail = EventModerationInfo & {
   id: string;
   slug: string;
   title: string;

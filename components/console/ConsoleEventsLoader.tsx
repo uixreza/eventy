@@ -1,6 +1,7 @@
 "use client";
 
 import DataFetchError from "@/components/dashboard/DataFetchError";
+import { useLiveRefresh } from "@/components/dashboard/useLiveRefresh";
 import { useServerData } from "@/components/dashboard/useServerData";
 import ConsoleEvents from "./ConsoleEvents";
 import { fetchConsoleEvents } from "./console-api";
@@ -16,6 +17,7 @@ import { refreshConsoleNavCounts } from "./useConsoleNavCounts";
  */
 export default function ConsoleEventsLoader() {
   const { data, loaded, failed, reload } = useServerData(fetchConsoleEvents);
+  useLiveRefresh(["console:events"], reload);
 
   if (failed) return <DataFetchError onRetry={reload} />;
   if (!loaded || !data) return <ConsoleEventsSkeleton />;

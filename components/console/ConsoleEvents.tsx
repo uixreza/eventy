@@ -2,9 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Check, Eye, MapPin, Search, X } from "lucide-react";
+import { Check, Eye, MapPin, RefreshCw, Search, Sparkles, X } from "lucide-react";
 import { sileo } from "sileo";
-import { reviewEvent } from "@/app/actions/events";
+import { checkEventModeration, reviewEvent } from "@/app/actions/events";
 import { eventLifecycleMeta } from "@/lib/event-types";
 import type { ConsoleEventRow } from "@/lib/event-types";
 import { faPrice, toFa } from "@/lib/utils";
@@ -56,6 +56,14 @@ export default function ConsoleEvents({
     });
   }, [query, filter, rows]);
 
+  /** Re-runs the loader's fetch in place — no full page navigation. */
+  function refresh() {
+    if (pending) return;
+    startTransition(() => {
+      onChanged();
+    });
+  }
+
   function review(row: ConsoleEventRow, approve: boolean) {
     startTransition(async () => {
       const result = await reviewEvent(row.id, approve);
@@ -67,6 +75,30 @@ export default function ConsoleEvents({
         title: `رویداد «${row.title}» ${approve ? "منتشر شد" : "برگردانده شد"}`,
         description: result.message,
       });
+      onChanged();
+    });
+  }
+
+  function aiCheck(row: ConsoleEventRow) {
+    startTransition(async () => {
+      const result = await checkEventModeration(row.id);
+      if (!result.ok) {
+        sileo.error({ title: result.error, description: "دوباره تلاش کنید." });
+        return;
+      }
+      if (result.approved) {
+        sileo.success({
+          title: `رویداد «${row.title}» تأیید توسط AI`,
+          description: result.message,
+        });
+      } else if (result.flagged) {
+        sileo.error({
+          title: `رویداد «${row.title}» توسط AI رد شد`,
+          description: result.message,
+        });
+      } else {
+        sileo.info({ title: "بررسی هوشمند ممکن نشد", description: result.message });
+      }
       onChanged();
     });
   }
@@ -83,16 +115,28 @@ export default function ConsoleEvents({
             {toFa(visible.length)} رویداد از {toFa(rows.length)} مورد؛ تأیید یا برگشت بدهید.
           </p>
         </div>
-        <div className="relative lg:w-72">
-          <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="جستجو در عنوان، برگزارکننده یا شهر..."
-            aria-label="جستجوی رویدادها"
-            className={`${filterClass} ps-9`}
-          />
+        <div className="flex w-full items-center gap-2 lg:w-96">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="جستجو در عنوان، برگزارکننده یا شهر..."
+              aria-label="جستجوی رویدادها"
+              className={`${filterClass} ps-9`}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={pending}
+            aria-label="تازه کردن فهرست رویدادها"
+            title="تازه کردن فهرست رویدادها"
+            className="inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-all duration-200 hover:border-blue-200 hover:text-blue-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:text-blue-300"
+          >
+            <RefreshCw className={`h-4 w-4 ${pending ? "animate-spin" : ""}`} />
+          </button>
         </div>
       </div>
 
@@ -145,6 +189,33 @@ export default function ConsoleEvents({
                       <p className="mt-0.5 truncate text-[11px] text-slate-400 dark:text-slate-500">
                         {event.organizer}
                       </p>
+                      {event.moderationFlagged ? (
+                        <p
+                          className="mt-1 flex items-center gap-1 text-[10px] font-bold text-red-600 dark:text-red-400"
+                          title={event.moderationNote ?? ""}
+                        >
+                          <Sparkles className="h-3 w-3 shrink-0" />
+                          <span className="truncate">
+                            رد توسط AI: {event.moderationNote ?? "دلیل ثبت نشد"}
+                          </span>
+                        </p>
+                      ) : event.moderationApproved ? (
+                        <p
+                          className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400"
+                          title={event.moderationNote ?? ""}
+                        >
+                          <Sparkles className="h-3 w-3 shrink-0" />
+                          <span>تأیید توسط AI</span>
+                        </p>
+                      ) : event.moderationCheckedAt ? (
+                        <p
+                          className="mt-1 flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500"
+                          title={event.moderationNote ?? ""}
+                        >
+                          <Sparkles className="h-3 w-3 shrink-0" />
+                          <span>بررسی AI ناموفق</span>
+                        </p>
+                      ) : null}
                     </td>
                     <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
                       <span className="block">{event.category}</span>
@@ -177,6 +248,16 @@ export default function ConsoleEvents({
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => aiCheck(event)}
+                          disabled={pending || event.status !== "PENDING"}
+                          aria-label={`بررسی هوشمند ${event.title}`}
+                          title="بررسی هوشمند با OpenAI"
+                          className="rounded-lg p-1.5 text-violet-600 transition-colors hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-violet-400 dark:hover:bg-violet-950"
+                        >
+                          <Sparkles className="h-4 w-4" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => setDetailId(event.id)}

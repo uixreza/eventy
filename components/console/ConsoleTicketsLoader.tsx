@@ -1,6 +1,7 @@
 "use client";
 
 import DataFetchError from "@/components/dashboard/DataFetchError";
+import { useLiveRefresh } from "@/components/dashboard/useLiveRefresh";
 import { useServerData } from "@/components/dashboard/useServerData";
 import ConsoleTickets from "./ConsoleTickets";
 import { fetchAdminTickets } from "./console-api";
@@ -14,6 +15,7 @@ import { refreshConsoleNavCounts } from "./useConsoleNavCounts";
  */
 export default function ConsoleTicketsLoader() {
   const { data, loaded, failed, reload } = useServerData(fetchAdminTickets);
+  useLiveRefresh(["console:tickets"], reload, { playSound: true });
 
   if (failed) return <DataFetchError onRetry={reload} />;
   if (!loaded || !data) return <ConsoleTicketsSkeleton />;

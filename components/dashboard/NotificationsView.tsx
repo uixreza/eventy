@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import {
@@ -24,6 +24,8 @@ import {
   publishUnreadCount,
   readNotificationIds,
 } from "@/components/dashboard/notification-read";
+import { playNotificationSound } from "@/components/dashboard/notification-sound";
+import { useLiveRefresh } from "@/components/dashboard/useLiveRefresh";
 import { useServerData } from "@/components/dashboard/useServerData";
 import type {
   DashboardNotification,
@@ -103,6 +105,29 @@ const kindMeta: Record<NotificationKind, { icon: LucideIcon; tint: string }> = {
  */
 export default function NotificationsView() {
   const { data, loaded, failed, reload } = useServerData(fetchNotifications);
+  const liveHintRef = useRef(false);
+  const previousUnreadRef = useRef<number | null>(null);
+
+  useLiveRefresh(["dashboard:notifications"], () => {
+    liveHintRef.current = true;
+    reload();
+  });
+
+  /* Only a live reload that actually brings a new unread row chimes. The
+     initial fetch and manual retries leave `liveHintRef` false. */
+  useEffect(() => {
+    if (!loaded || !data) return;
+    const readIds = readNotificationIds();
+    const count = data.notifications.filter(
+      (notice) => !readIds.includes(notice.id),
+    ).length;
+    const previous = previousUnreadRef.current;
+    previousUnreadRef.current = count;
+    if (liveHintRef.current) {
+      liveHintRef.current = false;
+      if (previous !== null && count > previous) playNotificationSound();
+    }
+  }, [data, loaded]);
 
   if (failed) return <DataFetchError onRetry={reload} />;
   if (!loaded || !data) return <NotificationsSkeleton />;

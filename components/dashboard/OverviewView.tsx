@@ -8,6 +8,7 @@ import {
   LifeBuoy,
   Plus,
   Settings,
+  Sparkles,
   Ticket,
   type LucideIcon,
 } from "lucide-react";
@@ -133,6 +134,11 @@ export default function OverviewView() {
         status: meta.label,
         tint: meta.tint,
         href: `/dashboard/events/${event.id}/edit`,
+        aiApproved: event.moderationApproved && event.status === "PENDING",
+        reason:
+          event.status === "REJECTED" && event.moderationFlagged
+            ? event.moderationNote
+            : null,
       };
     }),
     ...activeTickets.map((event) => ({
@@ -143,6 +149,8 @@ export default function OverviewView() {
       status: "ثبت‌نام قطعی",
       tint: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300",
       href: `/events/${event.slug}`,
+      aiApproved: false,
+      reason: null,
     })),
   ].slice(0, 4);
 
@@ -222,6 +230,17 @@ export default function OverviewView() {
                     <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
                       {ev.date} • {ev.place}
                     </p>
+                    {ev.aiApproved && (
+                      <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                        <Sparkles className="h-3 w-3" />
+                        تأیید توسط AI
+                      </p>
+                    )}
+                    {ev.reason && (
+                      <p className="mt-1 text-[11px] font-bold text-red-600 dark:text-red-400">
+                        دلیل رد AI: {ev.reason}
+                      </p>
+                    )}
                   </Link>
                   <span
                     className={`w-fit shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${ev.tint}`}

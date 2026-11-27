@@ -4,13 +4,14 @@ import { useEffect, useTransition } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Pencil, X } from "lucide-react";
+import { Check, Pencil, Sparkles, X } from "lucide-react";
 import { sileo } from "sileo";
-import { reviewEvent } from "@/app/actions/events";
+import { checkEventModeration, reviewEvent } from "@/app/actions/events";
 import EventImageSlideshow from "@/components/events/EventImageSlideshow";
 import DataFetchError from "@/components/dashboard/DataFetchError";
 import { useServerData } from "@/components/dashboard/useServerData";
 import { eventLifecycleMeta } from "@/lib/event-types";
+import { moderationCategoryLabels } from "@/lib/moderation-categories";
 import { faPrice, toFa } from "@/lib/utils";
 import { fetchConsoleEvent } from "./console-api";
 import { ConsoleEventDetailSkeleton } from "./ConsoleSkeletons";
@@ -87,6 +88,29 @@ export default function ConsoleEventDetailModal({ id, onClose, onChanged }: Moda
         description: result.message,
       });
       /* The queue and this dialog both re-read the database. */
+      onChanged();
+      reload();
+    });
+  }
+
+  function aiCheck() {
+    if (!data) return;
+    startTransition(async () => {
+      const result = await checkEventModeration(data.id);
+      if (!result.ok) {
+        sileo.error({ title: result.error, description: "دوباره تلاش کنید." });
+        return;
+      }
+      if (result.approved) {
+        sileo.success({ title: "تأیید توسط AI", description: result.message });
+      } else if (result.flagged) {
+        sileo.error({
+          title: "رویداد توسط AI رد شد",
+          description: result.message,
+        });
+      } else {
+        sileo.info({ title: "بررسی هوشمند ممکن نشد", description: result.message });
+      }
       onChanged();
       reload();
     });
@@ -180,6 +204,59 @@ export default function ConsoleEventDetailModal({ id, onClose, onChanged }: Moda
                     orientation="horizontal"
                   />
                 )}
+
+                {/* OpenAI's decision, kept next to the content it judged. */}
+                <Section title="بررسی هوشمند OpenAI">
+                  {!data.moderationCheckedAt ? (
+                    <p className="text-slate-400 dark:text-slate-500">
+                      هنوز بررسی هوشمندی روی این رویداد انجام نشده است.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      <p
+                        className={`font-bold ${
+                          data.moderationFlagged
+                            ? "text-red-600 dark:text-red-400"
+                            : data.moderationApproved
+                              ? "text-emerald-700 dark:text-emerald-400"
+                              : "text-slate-500 dark:text-slate-400"
+                        }`}
+                      >
+                        {data.moderationFlagged
+                          ? "رد توسط هوش مصنوعی"
+                          : data.moderationApproved
+                            ? "تأیید توسط AI — در انتظار تأیید مدیر"
+                            : "بررسی هوشمند ناموفق"}
+                      </p>
+                      {data.moderationCategories.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {moderationCategoryLabels(data.moderationCategories).map((label) => (
+                            <span
+                              key={label}
+                              className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                            >
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {data.moderationNote && (
+                        <p
+                          className={`text-xs leading-6 ${
+                            data.moderationFlagged
+                              ? "font-bold text-red-700 dark:text-red-300"
+                              : "text-slate-500 dark:text-slate-400"
+                          }`}
+                        >
+                          {data.moderationNote}
+                        </p>
+                      )}
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                        آخرین بررسی: {formatStamp(data.moderationCheckedAt)}
+                      </p>
+                    </div>
+                  )}
+                </Section>
 
                 {/* The copy an admin has to read before approving */}
                 <Section title="خلاصه">
@@ -280,7 +357,17 @@ export default function ConsoleEventDetailModal({ id, onClose, onChanged }: Moda
                 ویرایش اطلاعات
               </Link>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={aiCheck}
+                  disabled={pending || data.status !== "PENDING"}
+                  title="بررسی هوشمند با OpenAI"
+                  className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-white px-4 py-2.5 text-xs font-bold text-violet-700 transition-all duration-200 hover:border-violet-300 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-violet-900 dark:bg-slate-800 dark:text-violet-300 dark:hover:bg-violet-950"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  بررسی هوشمند
+                </button>
                 <button
                   type="button"
                   onClick={() => review(false)}

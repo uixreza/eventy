@@ -123,6 +123,14 @@ model Event {
   /// the event is PUBLISHED, so moderation still decides what goes public.
   promoted             Boolean     @default(false)
   status               EventStatus @default(PENDING)
+  /// Result of the most recent OpenAI moderation pass. A safe pass only adds
+  /// an AI-approved tag — an admin still publishes the event. A flagged pass
+  /// rejects it and records the reason for both the admin and the organizer.
+  moderationApproved   Boolean     @default(false)
+  moderationFlagged    Boolean     @default(false)
+  moderationCategories String[]    @default([])
+  moderationCheckedAt  DateTime?
+  moderationNote       String?
   /// The organizer — `null` for the events seeded by the platform.
   organizerId          String?
   organizer            User?       @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: SetNull)

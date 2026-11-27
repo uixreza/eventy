@@ -4,6 +4,7 @@ import { fetchMyEvents } from "@/components/dashboard/dashboard-api";
 import DataFetchError from "@/components/dashboard/DataFetchError";
 import MyEventsView from "@/components/dashboard/MyEventsView";
 import { MyEventsSkeleton } from "@/components/dashboard/Skeletons";
+import { useLiveRefresh } from "@/components/dashboard/useLiveRefresh";
 import { useServerData } from "@/components/dashboard/useServerData";
 
 /**
@@ -13,6 +14,7 @@ import { useServerData } from "@/components/dashboard/useServerData";
  */
 export default function MyEventsLoader() {
   const { data, loaded, failed, reload } = useServerData(fetchMyEvents);
+  useLiveRefresh(["dashboard:events"], reload);
 
   if (failed) return <DataFetchError onRetry={reload} />;
   if (!loaded || !data) return <MyEventsSkeleton />;

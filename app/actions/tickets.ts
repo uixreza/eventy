@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { requireAdminActor } from "@/app/actions/user";
+import { publishTicketsChanged } from "@/lib/live-events";
 import {
   MAX_TICKET_MESSAGE,
   MAX_TICKET_SUBJECT,
@@ -70,6 +71,7 @@ export async function createSupportTicket(input: {
       },
       select: { id: true },
     });
+    publishTicketsChanged({ userId });
     return { ok: true, ticketId: ticket.id };
   } catch {
     return { ok: false, error: "ثبت تیکت ممکن نشد؛ دوباره تلاش کنید." };
@@ -136,6 +138,7 @@ export async function addSupportTicketMessage(
         data: { status: nextStatus },
       }),
     ]);
+    publishTicketsChanged({ userId: ticket.ownerId });
     return { ok: true };
   } catch {
     return { ok: false, error: "ارسال پیام ممکن نشد؛ دوباره تلاش کنید." };
@@ -155,6 +158,7 @@ export async function closeSupportTicket(ticketId: string): Promise<TicketResult
       where: { id },
       data: { status: "CLOSED", closedAt: new Date() },
     });
+    publishTicketsChanged();
     return { ok: true };
   } catch {
     return { ok: false, error: "بسته کردن تیکت ممکن نشد؛ دوباره تلاش کنید." };
@@ -174,6 +178,7 @@ export async function reopenSupportTicket(ticketId: string): Promise<TicketResul
       where: { id },
       data: { status: "OPEN", closedAt: null },
     });
+    publishTicketsChanged();
     return { ok: true };
   } catch {
     return { ok: false, error: "بازگشایی تیکت ممکن نشد؛ دوباره تلاش کنید." };

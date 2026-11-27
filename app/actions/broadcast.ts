@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireAdminActor } from "@/app/actions/user";
+import { publishNotificationsChanged } from "@/lib/live-events";
 
 export type BroadcastResult = { ok: true } | { ok: false; error: string };
 
@@ -45,6 +46,7 @@ export async function sendBroadcast(input: {
   } catch {
     return { ok: false, error: "ارسال اعلان ممکن نشد؛ دوباره تلاش کنید." };
   }
+  publishNotificationsChanged();
 
   return { ok: true };
 }
@@ -62,6 +64,7 @@ export async function deleteBroadcast(id: string): Promise<BroadcastResult> {
   } catch {
     return { ok: false, error: "اعلان پیدا نشد یا حذف ذخیره نشد." };
   }
+  publishNotificationsChanged();
 
   return { ok: true };
 }

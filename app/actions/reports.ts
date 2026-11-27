@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { publishEventReportsChanged } from "@/lib/live-events";
 import {
   EVENT_REPORT_REASONS,
   MAX_REPORT_MESSAGE,
@@ -66,6 +67,7 @@ export async function submitEventReport(input: {
         message: rawMessage || null,
       },
     });
+    publishEventReportsChanged();
     return { ok: true };
   } catch {
     return { ok: false, error: "ثبت گزارش ممکن نشد؛ دوباره تلاش کنید." };

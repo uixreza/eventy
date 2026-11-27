@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  AlertTriangle,
   Bell,
   BellRing,
   Calendar,
@@ -12,6 +13,7 @@ import {
   MapPin,
   Pencil,
   Plus,
+  Sparkles,
   Ticket,
   Trash2,
   UsersRound,
@@ -23,6 +25,7 @@ import { cancelRegistration, deleteEvent, toggleReminder } from "@/app/actions/e
 import { eventImageUrl } from "@/lib/event-images";
 import { eventLifecycleMeta, registrationStateMeta } from "@/lib/event-types";
 import type { EnrolledEvent, HostedEvent } from "@/lib/event-types";
+import { moderationCategoryLabels } from "@/lib/moderation-categories";
 import { faPrice, shamsiMonths, toFa } from "@/lib/utils";
 
 const TABS = ["رویدادهای من", "ثبت‌نام‌های من"] as const;
@@ -242,6 +245,18 @@ export default function MyEventsView({ hosted, enrolled, onChanged }: MyEventsVi
                       >
                         {lifecycle.label}
                       </span>
+                      {event.moderationApproved && event.status === "PENDING" && (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                          <Sparkles className="h-3 w-3" />
+                          تأیید توسط AI
+                        </span>
+                      )}
+                      {event.moderationFlagged && event.status === "REJECTED" && (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-600 dark:bg-red-950 dark:text-red-300">
+                          <AlertTriangle className="h-3 w-3" />
+                          رد توسط AI
+                        </span>
+                      )}
                     </div>
                     <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
                       <span className="flex items-center gap-1">
@@ -273,6 +288,29 @@ export default function MyEventsView({ hosted, enrolled, onChanged }: MyEventsVi
                         )}
                       </span>
                     </p>
+                    {event.status === "REJECTED" &&
+                      event.moderationFlagged &&
+                      event.moderationNote && (
+                        <div className="mt-2.5 rounded-xl border border-red-200 bg-red-50 p-3 text-[11px] leading-6 text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">
+                          <p className="flex items-center gap-1.5 font-extrabold">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                            دلیل رد هوش مصنوعی
+                          </p>
+                          <p className="mt-1 font-semibold">{event.moderationNote}</p>
+                          {event.moderationCategories.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {moderationCategoryLabels(event.moderationCategories).map((label) => (
+                                <span
+                                  key={label}
+                                  className="rounded-full bg-white px-2 py-0.5 font-bold text-red-600 dark:bg-slate-900 dark:text-red-300"
+                                >
+                                  {label}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                   </div>
 
                   {/* Actions */}

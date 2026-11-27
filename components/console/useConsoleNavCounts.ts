@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useLiveRefresh } from "@/components/dashboard/useLiveRefresh";
 import type { ConsoleNavCounts } from "@/lib/console-types";
 import { fetchConsoleNavCounts } from "./console-api";
 
@@ -24,38 +25,40 @@ export function refreshConsoleNavCounts() {
  * The badge counts shared by the desktop sidebar and the mobile pills.
  *
  * `ConsoleShell` stays mounted between console routes, so the fetch is keyed
- * on `pathname` as well as running on mount. Mutations in the loaded pages
- * broadcast the event above; returning to the tab re-reads too, so a change
- * made elsewhere is picked up without a manual reload.
+ * on `pathname` as well as running on mount. Local mutations, returning to the
+ * tab, and live WebSocket hints all run this same loader.
  */
 export function useConsoleNavCounts(): ConsoleNavCounts {
   const pathname = usePathname();
   const [counts, setCounts] = useState<ConsoleNavCounts>(EMPTY_COUNTS);
+  const requestId = useRef(0);
+  const liveLoadRef = useRef<() => void>(() => undefined);
+  const loadFromLive = useCallback(() => liveLoadRef.current(), []);
 
   useEffect(() => {
-    let cancelled = false;
-    let requestId = 0;
-
     const load = async () => {
-      const id = ++requestId;
+      const id = ++requestId.current;
       try {
         const response = await fetchConsoleNavCounts();
-        if (!cancelled && id === requestId) setCounts(response.counts);
+        /* Ignore older answers when several hints arrive close together. */
+        if (id === requestId.current) setCounts(response.counts);
       } catch {
         /* Keep the last known numbers — a failed read is not a zero count. */
       }
     };
 
+    liveLoadRef.current = load;
     load();
     window.addEventListener(CONSOLE_COUNTS_CHANGED_EVENT, load);
     window.addEventListener("focus", load);
 
     return () => {
-      cancelled = true;
       window.removeEventListener(CONSOLE_COUNTS_CHANGED_EVENT, load);
       window.removeEventListener("focus", load);
     };
   }, [pathname]);
+
+  useLiveRefresh(["console:nav-counts"], loadFromLive);
 
   return counts;
 }

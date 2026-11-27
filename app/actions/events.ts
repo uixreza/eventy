@@ -14,7 +14,16 @@ import {
   MAX_EVENT_IMAGES,
 } from "@/lib/event-images";
 import { deleteEventImages, uploadEventImage } from "@/lib/event-storage";
+import {
+  moderateEventContent,
+  type EventModerationInput,
+  type EventModerationOutcome,
+} from "@/lib/event-moderation";
 import { isValidMapPoint } from "@/lib/map";
+import {
+  publishEventsChanged,
+  publishNotificationsChanged,
+} from "@/lib/live-events";
 
 /**
  * Every write to the event tables.
@@ -67,6 +76,18 @@ export type EventInput = {
 
 export type EventActionResult =
   | { ok: true; id?: string; message?: string }
+  | { ok: false; error: string };
+
+/** Result of the admin's manual "AI check" on a pending event. */
+export type EventModerationActionResult =
+  | {
+      ok: true;
+      approved: boolean;
+      flagged: boolean;
+      categories: string[];
+      note: string;
+      message: string;
+    }
   | { ok: false; error: string };
 
 const MAX_TITLE = 80;
@@ -433,9 +454,102 @@ async function currentUser() {
   return session?.user?.id ? { id: session.user.id, name: session.user.name ?? "" } : null;
 }
 
+/** Agenda titles for the moderation payload; the stored column is JSON. */
+function agendaTitles(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((row) => {
+    if (typeof row !== "object" || row === null) return [];
+    const title = (row as Record<string, unknown>).title;
+    return typeof title === "string" ? [title] : [];
+  });
+}
+
+function moderationInput(
+  value: Pick<
+    ValidatedEvent,
+    | "title"
+    | "description"
+    | "category"
+    | "city"
+    | "venue"
+    | "onlineUrl"
+    | "highlights"
+    | "agenda"
+    | "images"
+  >,
+  organizerName: string,
+): EventModerationInput {
+  return {
+    title: value.title,
+    summary: value.description.slice(0, 140),
+    description: value.description,
+    category: value.category,
+    city: value.city,
+    venue: value.venue,
+    onlineUrl: value.onlineUrl ?? "",
+    organizerName,
+    highlights: value.highlights,
+    agendaTitles: value.agenda.map((row) => row.title),
+    images: value.images,
+  };
+}
+
 /**
- * Creates an event. It starts as `PENDING` — an admin approves it in
- * `/console/events` before it becomes visible on the public pages.
+ * Runs OpenAI moderation and writes the result onto the row.
+ *
+ * A clean pass only tags the event as AI-approved; it still waits for an
+ * admin. Issues reject the event with a reason the organizer can read. A
+ * moderation failure never fails the surrounding save — the event stays
+ * pending without an AI approval tag.
+ */
+async function applyModeration(
+  eventId: string,
+  organizerId: string | null,
+  input: EventModerationInput,
+): Promise<EventModerationOutcome> {
+  let outcome: EventModerationOutcome;
+  try {
+    outcome = await moderateEventContent(input);
+  } catch {
+    outcome = {
+      status: "error",
+      flagged: false,
+      categories: [],
+      note: "بررسی هوشمند با خطای غیرمنتظره ای مواجه شد.",
+    };
+  }
+
+  try {
+    await prisma.event.update({
+      where: { id: eventId },
+      data: {
+        moderationApproved: outcome.status === "safe",
+        moderationFlagged: outcome.flagged,
+        moderationCategories: outcome.categories,
+        moderationCheckedAt: new Date(),
+        moderationNote: outcome.note,
+        /* AI rejects unsafe content, but it never publishes a safe event. */
+        ...(outcome.status === "flagged" ? { status: "REJECTED" as const } : {}),
+      },
+    });
+  } catch {
+    outcome = {
+      status: "error",
+      flagged: false,
+      categories: [],
+      note: "نتیجه بررسی هوشمند ذخیره نشد.",
+    };
+  }
+
+  updateTag("events");
+  updateTag(`event:${eventId}`);
+  if (organizerId) updateTag(`user-events:${organizerId}`);
+  return outcome;
+}
+
+/**
+ * Creates an event. AI moderation can reject it with a reason or mark it as
+ * AI-approved; either way the event waits for an admin in `/console/events`.
  */
 export async function createEvent(form: FormData): Promise<EventActionResult> {
   const user = await currentUser();
@@ -485,10 +599,23 @@ export async function createEvent(form: FormData): Promise<EventActionResult> {
     updateTag(`event:${event.id}`);
     updateTag(`user-events:${user.id}`);
 
+    const moderation = await applyModeration(
+      event.id,
+      user.id,
+      moderationInput(value, user.name),
+    );
+
+    publishEventsChanged({ userId: user.id });
+
     return {
       ok: true,
       id: event.id,
-      message: "رویداد شما ثبت شد و پس از تأیید کارشناسان منتشر می‌شود.",
+      message:
+        moderation.status === "safe"
+          ? "رویداد ثبت شد و توسط هوش مصنوعی ایمن تشخیص داده شد؛ هنوز منتظر تأیید مدیر است."
+          : moderation.status === "flagged"
+            ? `رویداد توسط هوش مصنوعی رد شد. دلیل: ${moderation.note}`
+            : "رویداد ثبت شد؛ بررسی هوشمند ممکن نشد و در صف تأیید ماند.",
     };
   } catch {
     await rollbackUploads(uploadedKeys);
@@ -497,8 +624,9 @@ export async function createEvent(form: FormData): Promise<EventActionResult> {
 }
 
 /**
- * Updates one of the caller's own events. A change sends the event back to
- * the moderation queue, so what people see stays reviewed.
+ * Updates one of the caller's own events. Every save re-runs AI moderation on
+ * the new content — including admin edits and edits of already published or
+ * rejected rows — so a changed listing is never shown on an old AI verdict.
  */
 export async function updateEvent(
   eventId: string,
@@ -515,7 +643,14 @@ export async function updateEvent(
 
   const event = await prisma.event.findFirst({
     where: isAdmin ? { id: eventId } : { id: eventId, organizerId: userId },
-    select: { id: true, startsAt: true, status: true, organizerId: true, images: true },
+    select: {
+      id: true,
+      startsAt: true,
+      status: true,
+      organizerId: true,
+      organizerName: true,
+      images: true,
+    },
   });
   if (!event) {
     return { ok: false, error: "این رویداد پیدا نشد یا متعلق به شما نیست." };
@@ -536,6 +671,12 @@ export async function updateEvent(
   const checked = validate(parsed.value, { isNew: !sameMoment });
   if (!checked.ok) return { ok: false, error: checked.error };
   const value = checked.value;
+
+  /* Every submitted edit returns to the review queue — including an admin's
+     edit of a published or rejected row. Moderation below can still send unsafe
+     content straight to REJECTED; a clean pass waits here for the admin. Only
+     a cancelled event keeps its status. */
+  const nextStatus = event.status === "CANCELLED" ? "CANCELLED" : "PENDING";
 
   const uploadedKeys: string[] = [];
   let savedImages: string[] = [];
@@ -563,14 +704,9 @@ export async function updateEvent(
         images: savedImages,
         needsPhotographyTeam: value.needsPhotographyTeam,
         promoted: value.promoted,
-        /* A participant's edit re-opens the review — a published or sent-back
-           event goes back to the queue. An admin's edit is final: the status
-           only changes through approve/reject. */
-        status: isAdmin
-          ? event.status
-          : event.status === "PUBLISHED" || event.status === "REJECTED"
-            ? "PENDING"
-            : event.status,
+        /* Submitted edits wait for a fresh review; moderation below turns
+           unsafe content into REJECTED. */
+        status: nextStatus,
       },
     });
 
@@ -588,12 +724,35 @@ export async function updateEvent(
 
   /* Only after the row is safely saved do we drop objects the editor removed.
      A cleanup failure leaves an orphan rather than breaking a valid event. */
+  /* Re-check on every submit, whatever the editor's role or the row's status.
+     The previous AI verdict belongs to the old content, so it must not carry
+     over. `applyModeration` only rejects unsafe content; a clean pass keeps
+     the current status and waits for the same human approval as before. */
+  const saved = { ...value, images: savedImages };
+  const moderation = await applyModeration(
+    event.id,
+    event.organizerId ?? userId,
+    moderationInput(saved, event.organizerName ?? ""),
+  );
+
   const removed = event.images.filter((key) => !savedImages.includes(key));
   if (removed.length > 0) {
     await deleteEventImages(removed).catch(() => {});
   }
 
-  return { ok: true, message: "تغییرات رویداد ذخیره شد." };
+  publishEventsChanged({ userId: event.organizerId ?? userId });
+
+  return {
+    ok: true,
+    message:
+      moderation?.status === "safe"
+        ? "تغییرات ذخیره شد؛ هوش مصنوعی رویداد را ایمن تشخیص داد و همچنان منتظر تأیید مدیر است."
+        : moderation?.status === "flagged"
+          ? `تغییرات ذخیره شد؛ رویداد توسط هوش مصنوعی رد شد. دلیل: ${moderation.note}`
+          : moderation
+            ? "تغییرات ذخیره شد؛ بررسی هوشمند ممکن نشد و رویداد در صف تأیید ماند."
+            : "تغییرات رویداد ذخیره شد.",
+  };
 }
 
 /** Deletes one of the caller's own events — its tickets go with it. */
@@ -623,6 +782,7 @@ export async function deleteEvent(eventId: string): Promise<EventActionResult> {
   updateTag("events");
   updateTag(`event:${event.id}`);
   updateTag(`user-events:${user.id}`);
+  publishEventsChanged({ userId: user.id });
 
   return { ok: true, message: "رویداد حذف شد." };
 }
@@ -710,6 +870,7 @@ export async function enrollInEvent(eventId: string): Promise<EventActionResult>
   updateTag("events");
   updateTag(`event:${event.id}`);
   updateTag(`user-registrations:${user.id}`);
+  publishEventsChanged({ userId: user.id });
 
   return {
     ok: true,
@@ -773,6 +934,7 @@ export async function cancelRegistration(registrationId: string): Promise<EventA
   updateTag("events");
   updateTag(`event:${registration.eventId}`);
   updateTag(`user-registrations:${user.id}`);
+  publishEventsChanged({ userId: user.id });
 
   return { ok: true, message: "ثبت‌نام لغو شد." };
 }
@@ -803,6 +965,7 @@ export async function toggleReminder(registrationId: string): Promise<EventActio
 
   updateTag(`user-registrations:${user.id}`);
   updateTag(`event:${registration.eventId}`);
+  publishEventsChanged({ userId: user.id });
 
   return {
     ok: true,
@@ -851,6 +1014,7 @@ export async function toggleBookmark(eventId: string): Promise<BookmarkActionRes
      `/dashboard/saved` (or anywhere) refetches instead of showing a
      pre-bookmark flight from the browser cache. */
   updateTag(`user-bookmarks:${user.id}`);
+  publishNotificationsChanged({ userId: user.id });
 
   return { ok: true, saved: !existing };
 }
@@ -902,12 +1066,86 @@ export async function reviewEvent(
   updateTag("events");
   updateTag(`event:${event.id}`);
   if (event.organizerId) updateTag(`user-events:${event.organizerId}`);
+  publishEventsChanged(event.organizerId ? { userId: event.organizerId } : {});
 
   return {
     ok: true,
     message: approve
       ? "رویداد تأیید و منتشر شد."
       : "رویداد برای اصلاح به برگزارکننده بازگردانده شد.",
+  };
+}
+
+/**
+ * Admin-triggered AI check from `/console/events`. Only pending rows are
+ * eligible: this action never unpublishes an event that is already live.
+ */
+export async function checkEventModeration(
+  eventId: string,
+): Promise<EventModerationActionResult> {
+  const session = await getSession();
+  if (!session?.user?.id) {
+    return { ok: false, error: "نشست شما به پایان رسیده است؛ دوباره وارد شوید." };
+  }
+  if (session.user.role !== "ADMIN") {
+    return { ok: false, error: "این عملیات فقط برای مدیر انجام می‌شود." };
+  }
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: {
+      id: true,
+      status: true,
+      organizerId: true,
+      organizerName: true,
+      title: true,
+      summary: true,
+      description: true,
+      category: true,
+      city: true,
+      venue: true,
+      onlineUrl: true,
+      highlights: true,
+      agenda: true,
+      images: true,
+    },
+  });
+  if (!event) return { ok: false, error: "این رویداد پیدا نشد." };
+  if (event.status !== "PENDING") {
+    return { ok: false, error: "فقط رویدادهای در انتظار تأیید قابل بررسی هوشمند هستند." };
+  }
+
+  const outcome = await applyModeration(
+    event.id,
+    event.organizerId,
+    {
+      title: event.title,
+      summary: event.summary,
+      description: event.description,
+      category: event.category,
+      city: event.city,
+      venue: event.venue,
+      onlineUrl: event.onlineUrl ?? "",
+      organizerName: event.organizerName,
+      highlights: event.highlights,
+      agendaTitles: agendaTitles(event.agenda),
+      images: event.images,
+    },
+  );
+
+  const approved = outcome.status === "safe";
+  publishEventsChanged(event.organizerId ? { userId: event.organizerId } : {});
+  return {
+    ok: true,
+    approved,
+    flagged: outcome.flagged,
+    categories: outcome.categories,
+    note: outcome.note,
+    message: approved
+      ? "OpenAI محتوا را ایمن تشخیص داد؛ رویداد در انتظار تأیید مدیر ماند."
+      : outcome.flagged
+        ? `رویداد توسط OpenAI رد شد. دلیل: ${outcome.note}`
+        : "بررسی هوشمند ممکن نشد؛ رویداد در صف تأیید ماند.",
   };
 }
 
